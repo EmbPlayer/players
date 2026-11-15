@@ -60,6 +60,13 @@ if(location.protocol === "https:") httpsWarn.classList.remove("hidden");
 
 /* ---------- fullscreen viewer ---------- */
 function openViewer(ip, port){
+  /* --- local network access gate (must be granted to open devices) --- */
+  if(typeof localNetBlocked === "function" && localNetBlocked()){
+    showLocalNetGate();
+    notify("Allow local network access before opening devices.", "error");
+    return;
+  }
+
   const url = `http://${ip}:${port}/`;
   state.currentViewerUrl = url;
   viewerFrame.src = url;
@@ -80,6 +87,12 @@ viewerClose.addEventListener("click", closeViewer);
 
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
+
+  // If the local-network gate is open, do NOT let Escape dismiss
+  // anything behind it — the user must grant permission first.
+  const gate = document.getElementById("localNetGate");
+  if(gate && !gate.classList.contains("hidden")) return;
+
   if(!viewer.classList.contains("hidden")) closeViewer();
   if(!configModal.classList.contains("hidden")) closeConfigModal();
 });
