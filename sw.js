@@ -14,6 +14,7 @@ const PRECACHE_URLS = [
   "./js/storage.js",
   "./js/ui.js",
   "./js/url.js",
+  "./js/localnet.js", 
   "./js/saved.js",
   "./js/results.js",
   "./js/scan.js",
