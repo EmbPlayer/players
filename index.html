@@ -9,7 +9,6 @@
 </head>
 <body>
 
-<!-- ==================== HEADER ==================== -->
 <header class="page-header">
   <div class="brand">
     <div class="logo" aria-hidden="true">📡</div>
@@ -35,7 +34,6 @@
   Serve this page from <code>http://localhost:…</code> instead.</span>
 </div>
 
-<!-- ==================== BROWSER SUPPORT BANNER ==================== -->
 <div id="browserSupportBanner" class="support-banner hidden" role="status">
   <span class="support-banner-icon" id="bsbIcon" aria-hidden="true">⚠️</span>
   <div class="support-banner-body">
@@ -48,7 +46,6 @@
   </div>
 </div>
 
-<!-- ==================== RESULTS ==================== -->
 <div id="resultsContainer" class="panel" style="display:none;">
 
   <div class="top-bar">
@@ -92,7 +89,6 @@
   </div>
 </div>
 
-<!-- ==================== SAVED ==================== -->
 <div class="section-title"><span>⭐ Saved Devices</span></div>
 
 <div id="savedTableWrapper" class="table-responsive hidden">
@@ -112,7 +108,6 @@
   No saved links yet. Tap ☆ Save next to any scanned device to keep it here.
 </div>
 
-<!-- ==================== CONFIG MODAL ==================== -->
 <div id="configModal" class="hidden" role="dialog" aria-modal="true" aria-label="Scan options">
   <div class="modal-content">
     <div class="modal-head">
@@ -151,7 +146,7 @@
 <div id="viewer" class="hidden" role="dialog" aria-modal="true">
   <iframe id="viewerFrame" src="about:blank" referrerpolicy="no-referrer"></iframe>
   <div class="toolbar">
-    <button id="viewerLabelToggle" class="label-toggle-btn hidden"
+    <button id="viewerLabelToggle" class="label-toggle-btn"
             type="button" title="Show label" aria-label="Toggle device label">📌</button>
     <span id="viewerLabel" class="viewer-label hidden"></span>
     <button id="viewerReload" title="Reload embedded page">🔄</button>
@@ -161,7 +156,6 @@
   </div>
 </div>
 
-<!-- ==================== LOCAL NETWORK GATE ==================== -->
 <div id="localNetGate" class="hidden" role="alertdialog" aria-modal="true"
      aria-labelledby="lnTitle">
   <div class="ln-content">
@@ -186,10 +180,8 @@
   </div>
 </div>
 
-<!-- ==================== TOASTS ==================== -->
 <div id="toasts" aria-live="polite"></div>
 
-<!-- ==================== SCRIPTS (order matters) ==================== -->
 <script src="js/config.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/ui.js"></script>
