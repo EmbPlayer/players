@@ -761,10 +761,15 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
   border:0;
   background:#fff;
 }
+
+/* --- toolbar: pinned to the TOP-LEFT corner (always) --- */
 #viewer .toolbar{
   position:fixed;
-  bottom:calc(14px + env(safe-area-inset-bottom));
-  right:calc(14px + env(safe-area-inset-right));
+  top:calc(14px + env(safe-area-inset-top));
+  left:calc(14px + env(safe-area-inset-left));
+  right:auto;
+  bottom:auto;
+  transform:none;
   z-index:1010;
   display:flex;
   align-items:center;
@@ -1021,10 +1026,21 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
   .modal-actions{ flex-direction:column-reverse; }
   .modal-actions button{ width:100%; min-height:44px; }
 
+  /* --- viewer toolbar: stays TOP-LEFT on mobile, just tighter --- */
   #viewer .toolbar{
-    bottom:calc(10px + env(safe-area-inset-bottom));
-    right:50%;
-    transform:translateX(50%);
+    top:calc(10px + env(safe-area-inset-top));
+    left:calc(10px + env(safe-area-inset-left));
+    right:auto;
+    bottom:auto;
+    transform:none;
+    padding:6px;
+    border-radius:14px;
+  }
+  #viewer .toolbar button{
+    min-width:40px;
+    min-height:40px;
+    padding:7px 12px;
+    border-radius:10px;
   }
 
   /* banner + gate responsiveness */
