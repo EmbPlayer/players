@@ -1077,3 +1077,14 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
   #localNetGate .ln-actions{ flex-direction:column-reverse; }
   #localNetGate .ln-actions button{ width:100%; min-height:44px; }
 }
+
+/* --- label toggle button (📌) --- */
+#viewer .toolbar .label-toggle-btn{
+  font-size:16px;
+  transition:background .15s, border-color .15s, color .15s;
+}
+#viewer .toolbar .label-toggle-btn.active{
+  background:rgba(254,249,195,.28);
+  border-color:rgba(254,249,195,.55);
+  color:#fef9c3;
+}
