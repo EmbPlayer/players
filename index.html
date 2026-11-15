@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Emplayer Scanner</title>
 <style>
   :root {
@@ -39,6 +39,7 @@
     margin: 0 auto;
     padding: 32px 20px;
     line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
   }
 
   /* Alerts */
@@ -49,8 +50,9 @@
     font-size: 13px;
     border: 1px solid;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
+    word-break: break-word;
   }
   .warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
   .err { background: var(--err-bg); border-color: var(--err-border); color: var(--err-text); }
@@ -106,6 +108,7 @@
     white-space: nowrap;
     transition: all 0.2s ease;
     box-shadow: var(--shadow-sm);
+    touch-action: manipulation;
   }
   button:hover:not(:disabled), a.btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
   button:active:not(:disabled) { transform: translateY(1px); }
@@ -145,7 +148,11 @@
     border: 1px solid var(--border);
     box-shadow: var(--shadow-sm);
   }
-  .top-bar .ip-box { flex: 1 1 260px; min-width: 200px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .top-bar .ip-box {
+    flex: 1 1 260px;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
 
   /* Progress Area */
   #progressContainer {
@@ -157,57 +164,56 @@
   }
   #progressBar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 10px; }
   #progressBar > div { height: 100%; width: 0; background: var(--primary); transition: width 0.15s ease; border-radius: 4px; }
-  #statusLine { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
+  #statusLine { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; font-weight: 500; gap: 8px; }
   #statusText { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* Results Toggle & Table */
-  .section-toggle-btn {
+  /* Responsive Table Wrapper */
+  .table-responsive {
     width: 100%;
-    justify-content: space-between;
-    font-weight: 600;
-    background: var(--surface);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border: 1px solid var(--border);
-    padding: 12px 18px;
     border-radius: 10px;
-    margin-bottom: 12px;
-    box-shadow: var(--shadow-sm);
+    background: var(--surface);
   }
-  .section-toggle-btn:hover { background: #f8fafc; }
 
   table {
     border-collapse: collapse;
     width: 100%;
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
     margin-bottom: 0;
   }
   th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
-  th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   
   tr.open-row { background: var(--open-bg); }
   tr.known-row { background: var(--surface); }
   tr.target-row { background: var(--target-bg); }
   
-  td.ip { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; cursor: pointer; color: var(--primary); font-weight: 600; }
+  td.ip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 600;
+    white-space: nowrap;
+  }
   td.ip:hover { color: var(--primary-hover); text-decoration: underline; text-underline-offset: 3px; }
   
   /* Unified Table Actions & Inline Label Editing */
-  .cell-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .label-text { cursor: pointer; flex: 1; padding: 4px 0; color: var(--primary); font-weight: 500; }
+  .cell-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 180px; }
+  .label-text { cursor: pointer; flex: 1; padding: 4px 0; color: var(--primary); font-weight: 500; word-break: break-word; }
   .label-text:hover { text-decoration: underline; text-underline-offset: 3px; }
   .label-text.empty { color: var(--muted); font-style: italic; font-weight: normal; cursor: default; }
   
-  .edit-icon, .save-link-btn, .delete-icon { background: none; border: none; font-size: 14px; cursor: pointer; opacity: 0.7; padding: 6px 8px; border-radius: 6px; transition: all 0.15s ease; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; }
+  .edit-icon, .save-link-btn, .delete-icon { background: none; border: none; font-size: 14px; cursor: pointer; opacity: 0.75; padding: 6px 8px; border-radius: 6px; transition: all 0.15s ease; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .edit-icon:hover, .save-link-btn:hover { opacity: 1; background: #f1f5f9; }
   .save-link-btn.saved { color: #16a34a; opacity: 1; font-weight: 600; }
   .delete-icon:hover { opacity: 1; background: #fef2f2; color: #dc2626; }
   
-  .label-edit-container { display: none; align-items: center; gap: 8px; flex: 1; }
-  .label-input { flex: 1; padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
-  .saved-indicator { color: var(--success-text); font-weight: 500; font-size: 13px; background: var(--success-bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--success-border); }
+  .label-edit-container { display: none; align-items: center; gap: 8px; flex: 1; min-width: 160px; }
+  .label-input { flex: 1; min-width: 110px; padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
+  .saved-indicator { color: var(--success-text); font-weight: 500; font-size: 13px; background: var(--success-bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--success-border); white-space: nowrap; }
 
   /* Saved Links Section */
   .section-title { font-size: 16px; font-weight: 700; margin: 28px 0 12px; display: flex; justify-content: space-between; align-items: center; color: var(--fg); }
@@ -218,9 +224,9 @@
   .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; flex-wrap: wrap; font-weight: 500; }
 
   /* ================== CONFIG MODAL ================== */
-  #configModal { position: fixed; inset: 0; z-index: 900; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #configModal { position: fixed; inset: 0; z-index: 900; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px; }
   #configModal .modal-content { background: var(--surface); border-radius: 16px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); padding: 24px; border: 1px solid var(--border); }
-  #configModal h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; }
+  #configModal h2 { margin: 0; font-size: 18px; font-weight: 700; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px; }
   .close-x { background: none; border: none; font-size: 20px; line-height: 1; padding: 6px; cursor: pointer; color: var(--muted); border-radius: 6px; box-shadow: none; }
   .close-x:hover { background: #f1f5f9; color: var(--fg); }
@@ -228,10 +234,23 @@
   /* ================== FULLSCREEN VIEWER ================== */
   #viewer { position: fixed; inset: 0; z-index: 1000; background: var(--surface); }
   #viewer iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface); }
-  #viewer .toolbar { position: fixed; top: 16px; right: 16px; z-index: 1010; display: flex; gap: 8px; align-items: center; padding: 8px; background: rgba(15, 23, 42, 0.85); border-radius: 12px; box-shadow: var(--shadow-lg); backdrop-filter: blur(8px); }
-  #viewer .toolbar button { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; cursor: pointer; font: inherit; font-size: 14px; min-height: 36px; min-width: 36px; box-shadow: none; }
+  #viewer .toolbar {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 1010;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px;
+    background: rgba(15, 23, 42, 0.85);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(8px);
+  }
+  #viewer .toolbar button { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; cursor: pointer; font: inherit; font-size: 14px; min-height: 38px; min-width: 38px; box-shadow: none; }
   #viewer .toolbar button:hover { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.3); }
-  #viewer .toolbar .backbtn { background: #16a34a; border-color: #15803d; font-weight: 600; padding: 8px 16px; gap: 8px; color: #fff; }
+  #viewer .toolbar .backbtn { background: #16a34a; border-color: #15803d; font-weight: 600; padding: 8px 14px; gap: 6px; color: #fff; }
   #viewer .toolbar .backbtn:hover { background: #15803d; }
 
   /* ================== QR SCANNER ================== */
@@ -246,6 +265,86 @@
   @keyframes scan { 0%, 100% { top: 5%; } 50% { top: 95%; } }
   #qrModal .foot { padding: 12px 20px; font-size: 13px; color: #94a3b8; background: #1e293b; flex-shrink: 0; border-top: 1px solid #334155; }
   #qrModal .foot code { background: #334155; color: #f8fafc; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+
+  /* ================== MOBILE RESPONSIVE ================== */
+  @media screen and (max-width: 768px) {
+    /* Prevent iOS Safari auto-zoom on input focus */
+    input[type="text"], input[type="number"], .label-input {
+      font-size: 16px !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    body {
+      padding: 16px 12px;
+    }
+
+    .page-header {
+      margin-bottom: 14px;
+    }
+    .page-header h1 {
+      font-size: 20px;
+    }
+
+    .panel {
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .top-bar {
+      padding: 12px;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .top-bar .ip-box {
+      flex: 1 1 100%;
+      min-height: 44px;
+    }
+    .top-bar button {
+      flex: 1 1 calc(50% - 4px);
+      min-height: 42px;
+      padding: 10px 10px;
+      font-size: 13px;
+    }
+
+    #progressContainer {
+      padding: 12px 14px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .section-title {
+      margin: 22px 0 10px;
+      font-size: 15px;
+    }
+
+    .empty {
+      padding: 22px 14px;
+      font-size: 13px;
+    }
+
+    #configModal .modal-content {
+      padding: 18px;
+    }
+    .modal-actions {
+      flex-direction: column-reverse;
+    }
+    .modal-actions button {
+      width: 100%;
+      min-height: 42px;
+    }
+
+    #qrModal .panel {
+      inset: 16px;
+      border-radius: 14px;
+    }
+    #qrModal .head, #qrModal .foot {
+      padding: 12px 14px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -260,15 +359,15 @@
   <input id="topDeviceUrl" class="ip-box" type="text" placeholder="http://192.168.0.1:8080" autocomplete="off" spellcheck="false" title="Device IP or URL">
   <button id="btnToggleResults" class="icon"><span>▶ Scan Results</span></button>
   <button id="topQrBtn" class="icon" title="Scan QR code">📷 QR Code</button>
-  <button id="btnRunScan" class="primary" title="Run network scan">🚀 Run Scan</button>
   <button id="btnOpenConfig" title="Settings">⚙️ Settings</button>
+  <button id="btnRunScan" class="primary" title="Run network scan">🚀 Run Scan</button>
 </div>
 
 <div id="httpsWarn" class="err hidden">
-  ⚠️ This page is served over <strong>HTTPS</strong>, so probing <code>http://192.168.x.x:port</code> will fail due to mixed content restrictions. Serve this page from <code>http://localhost:…</code> instead.
+  <span>⚠️ This page is served over <strong>HTTPS</strong>, so probing <code>http://192.168.x.x:port</code> will fail due to mixed content restrictions. Serve this page from <code>http://localhost:…</code> instead.</span>
 </div>
 <div id="cameraWarn" class="warn hidden">
-  📷 Camera unavailable here (this page is not on <code>localhost</code> or <code>https://</code>). QR scanning is disabled, but you can still type the URL manually.
+  <span>📷 Camera unavailable here (this page is not on <code>localhost</code> or <code>https://</code>). QR scanning is disabled, but you can still type the URL manually.</span>
 </div>
 
 <!-- Results Container (Unified Box - Hidden by Default) -->
@@ -277,29 +376,33 @@
   <div id="progressContainer" class="hidden">
     <div id="statusLine">
       <span id="statusText">Ready.</span>
-      <button id="stopBtn" disabled class="danger" style="padding: 4px 12px; font-size: 12px; margin-left: 12px;">Stop</button>
+      <button id="stopBtn" disabled class="danger" style="padding: 4px 12px; font-size: 12px; margin-left: 8px;">Stop</button>
     </div>
     <div id="progressBar"><div></div></div>
   </div>
 
-  <div id="summary" style="font-size: 13px; margin: 0 0 16px; color: var(--muted); font-weight: 500;"></div>
-  <table id="resultsTable" class="hidden">
-    <thead>
-      <tr><th style="width: 220px;">IP (Click to open)</th><th>Label / Save Status</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <div id="summary" style="font-size: 13px; margin: 0 0 14px; color: var(--muted); font-weight: 500;"></div>
+  <div id="resultsTableWrapper" class="table-responsive hidden">
+    <table id="resultsTable">
+      <thead>
+        <tr><th style="min-width: 150px;">IP (Click to open)</th><th>Label / Save Status</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
   <div id="emptyState" class="empty">No scan results yet. Click "Run Scan" to scan the network.</div>
 </div>
 
 <!-- Saved Links Section -->
 <div class="section-title">⭐ Saved Devices</div>
-<table id="savedTable" class="hidden">
-  <thead>
-    <tr><th style="width: 240px;">URL / IP</th><th>Label</th><th style="width: 100px; text-align: right;">Action</th></tr>
-  </thead>
-  <tbody id="savedTbody"></tbody>
-</table>
+<div id="savedTableWrapper" class="table-responsive hidden">
+  <table id="savedTable">
+    <thead>
+      <tr><th style="min-width: 190px;">URL / IP</th><th>Label</th><th style="width: 72px; text-align: right;">Action</th></tr>
+    </thead>
+    <tbody id="savedTbody"></tbody>
+  </table>
+</div>
 <div id="savedEmptyState" class="panel empty" style="margin-bottom: 20px;">No saved links yet. Click the save icon next to any scanned device to add it here and edit its label.</div>
 
 <!-- ================== CONFIG MODAL ================== -->
@@ -376,9 +479,9 @@ const watchToggle = $("watchMode"), watchInput = $("watchInterval");
 
 const stopBtn = $("stopBtn"), progressContainer = $("progressContainer"), progressBar = $("progressBar").firstElementChild;
 const statusText = $("statusText"), summaryEl = $("summary");
-const tableEl = $("resultsTable"), tbody = tableEl.querySelector("tbody"), emptyState = $("emptyState");
+const resultsTableWrapper = $("resultsTableWrapper"), tableEl = $("resultsTable"), tbody = tableEl.querySelector("tbody"), emptyState = $("emptyState");
 const resultsContainer = $("resultsContainer"), btnToggleResults = $("btnToggleResults");
-const savedTable = $("savedTable"), savedTbody = $("savedTbody"), savedEmptyState = $("savedEmptyState");
+const savedTableWrapper = $("savedTableWrapper"), savedTable = $("savedTable"), savedTbody = $("savedTbody"), savedEmptyState = $("savedEmptyState");
 const httpsWarn = $("httpsWarn"), cameraWarn = $("cameraWarn");
 
 const viewer = $("viewer"), viewerFrame = $("viewerFrame");
@@ -571,12 +674,12 @@ function toggleSaveLink(ip, port){
 
 function renderSavedList(){
   if(!state.savedLinks.length){
-    savedTable.classList.add("hidden");
+    savedTableWrapper.classList.add("hidden");
     savedEmptyState.classList.remove("hidden");
     return;
   }
   savedEmptyState.classList.add("hidden");
-  savedTable.classList.remove("hidden");
+  savedTableWrapper.classList.remove("hidden");
   savedTbody.innerHTML = "";
 
   for(const item of state.savedLinks){
@@ -706,14 +809,14 @@ function renderSavedList(){
 // ---------- results rendering ----------
 function renderList(openList, port, isScanning = false){
   if(openList.length === 0 && !isScanning){
-    tableEl.classList.add("hidden");
+    resultsTableWrapper.classList.add("hidden");
     emptyState.classList.remove("hidden");
     summaryEl.innerHTML = `No responsive devices found on port <strong>${port}</strong>.`;
     return;
   }
 
   emptyState.classList.add("hidden");
-  tableEl.classList.remove("hidden");
+  resultsTableWrapper.classList.remove("hidden");
   tbody.innerHTML = "";
   
   let list = [...openList];
