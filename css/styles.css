@@ -632,9 +632,9 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
 }
 
 /* ============================================================
-   EMPTY STATE
+   EMPTY STATE  ← renamed from .empty to .empty-state
    ============================================================ */
-.empty{
+.empty-state{
   padding:34px 22px;
   text-align:center;
   font-size:13.5px;
@@ -999,7 +999,7 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
   .cell-actions{ min-width:0; gap:8px; }
   .label-edit-container{ flex-wrap:wrap; }
 
-  .empty{ padding:26px 16px; font-size:13px; }
+  .empty-state{ padding:26px 16px; font-size:13px; }
 
   #configModal .modal-content{ padding:18px; border-radius:18px; }
   .modal-actions{ flex-direction:column-reverse; }
