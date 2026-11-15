@@ -145,12 +145,19 @@ btnRunScan.addEventListener("click", async () => {
     state.lastOpenList = openDevices;
     renderList(openDevices, port, false);
 
-    /* If a scan finds nothing on a soft-gate browser, do NOT
-       pretend LAN access is fine. Reset the badge and reopen
-       the banner. */
-    if(openDevices.length === 0 && !state.stopRequested &&
-       typeof reportScanFailure === "function"){
-      reportScanFailure();
+    /* Tell the LNA layer what happened. A successful scan is the ONLY
+       proof that LAN access works; a failed scan resets the badge so it
+       can never falsely claim success. */
+    if(!state.stopRequested){
+      if(openDevices.length > 0){
+        if(typeof reportScanSuccess === "function"){
+          reportScanSuccess(openDevices.length);
+        }
+      }else{
+        if(typeof reportScanFailure === "function"){
+          reportScanFailure();
+        }
+      }
     }
 
   }catch(e){
