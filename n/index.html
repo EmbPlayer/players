@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emplayer Scanner</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --fg: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --surface: #ffffff;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success-bg: #f0fdf4;
+    --success-border: #bbf7d0;
+    --success-text: #166534;
+    --warn-bg: #fefce8;
+    --warn-border: #fef08a;
+    --warn-text: #854d0e;
+    --err-bg: #fef2f2;
+    --err-border: #fecaca;
+    --err-text: #991b1b;
+    --target-bg: #fef9c3;
+    --known-bg: #f0f9ff;
+    --open-bg: #f0fdf4;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 32px 20px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Alerts */
+  .err, .warn {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    border: 1px solid;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    word-break: break-word;
+  }
+  .warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
+  .err { background: var(--err-bg); border-color: var(--err-border); color: var(--err-text); }
+
+  /* Panels & Cards */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  input[type="text"], input[type="number"] {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+    font-size: 14px;
+    width: 100%;
+    background: var(--surface);
+    color: var(--fg);
+    transition: all 0.2s ease;
+  }
+  input[type="text"]:focus, input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+
+  button, a.btn {
+    padding: 10px 16px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: #f8fafc;
+    border-radius: 8px;
+    color: var(--fg);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+    touch-action: manipulation;
+  }
+  button:hover:not(:disabled), a.btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+  
+  button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  button.primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+  button.icon { padding: 10px 14px; font-weight: 600; }
+  button.danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+  button.danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+
+  /* Page Header */
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .page-header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+  }
+
+  /* ---- Top Bar ---- */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    background: var(--surface);
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .top-bar .ip-box {
+    flex: 1 1 260px;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  /* Progress Area */
+  #progressContainer {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+  #progressBar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+  #progressBar > div { height: 100%; width: 0; background: var(--primary); transition: width 0.15s ease; border-radius: 4px; }
+  #statusLine { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; font-weight: 500; gap: 8px; }
+  #statusText { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Responsive Table Wrapper */
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    background: var(--surface);
+    margin-bottom: 0;
+  }
+  th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
+  th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  
+  tr.open-row { background: var(--open-bg); }
+  tr.known-row { background: var(--surface); }
+  tr.target-row { background: var(--target-bg); }
+  
+  td.ip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  td.ip:hover { color: var(--primary-hover); text-decoration: underline; text-underline-offset: 3px; }
+  
+  /* Unified Table Actions & Inline Label Editing */
+  .cell-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 180px; }
+  .label-text { cursor: pointer; flex: 1; padding: 4px 0; color: var(--primary); font-weight: 500; word-break: break-word; }
+  .label-text:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .label-text.empty { color: var(--muted); font-style: italic; font-weight: normal; cursor: default; }
+  
+  .edit-icon, .save-link-btn, .delete-icon { background: none; border: none; font-size: 14px; cursor: pointer; opacity: 0.75; padding: 6px 8px; border-radius: 6px; transition: all 0.15s ease; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .edit-icon:hover, .save-link-btn:hover { opacity: 1; background: #f1f5f9; }
+  .save-link-btn.saved { color: #16a34a; opacity: 1; font-weight: 600; }
+  .delete-icon:hover { opacity: 1; background: #fef2f2; color: #dc2626; }
+  
+  .label-edit-container { display: none; align-items: center; gap: 8px; flex: 1; min-width: 160px; }
+  .label-input { flex: 1; min-width: 110px; padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
+  .saved-indicator { color: var(--success-text); font-weight: 500; font-size: 13px; background: var(--success-bg); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--success-border); white-space: nowrap; }
+
+  /* Saved Links Section */
+  .section-title { font-size: 16px; font-weight: 700; margin: 28px 0 12px; display: flex; justify-content: space-between; align-items: center; color: var(--fg); }
+  .saved-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+
+  .empty { padding: 30px 20px; text-align: center; color: var(--muted); font-size: 14px; font-weight: 500; background: #f8fafc; border: 1px dashed var(--border); border-radius: 8px; }
+  .hidden { display: none !important; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; flex-wrap: wrap; font-weight: 500; }
+
+  /* ================== CONFIG MODAL ================== */
+  #configModal { position: fixed; inset: 0; z-index: 900; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #configModal .modal-content { background: var(--surface); border-radius: 16px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); padding: 24px; border: 1px solid var(--border); }
+  #configModal h2 { margin: 0; font-size: 18px; font-weight: 700; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .close-x { background: none; border: none; font-size: 20px; line-height: 1; padding: 6px; cursor: pointer; color: var(--muted); border-radius: 6px; box-shadow: none; }
+  .close-x:hover { background: #f1f5f9; color: var(--fg); }
+
+  /* ================== FULLSCREEN VIEWER ================== */
+  #viewer { position: fixed; inset: 0; z-index: 1000; background: var(--surface); }
+  #viewer iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface); }
+  #viewer .toolbar {
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 1010;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px;
+    background: rgba(15, 23, 42, 0.85);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(8px);
+  }
+  #viewer .toolbar button { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 8px 12px; cursor: pointer; font: inherit; font-size: 14px; min-height: 38px; min-width: 38px; box-shadow: none; }
+  #viewer .toolbar button:hover { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.3); }
+  #viewer .toolbar .backbtn { background: #16a34a; border-color: #15803d; font-weight: 600; padding: 8px 14px; gap: 6px; color: #fff; }
+  #viewer .toolbar .backbtn:hover { background: #15803d; }
+
+  /* ================== QR SCANNER ================== */
+  #qrModal { position: fixed; inset: 0; z-index: 1100; }
+  #qrModal .backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+  #qrModal .panel { position: absolute; inset: 8vh 12vw; background: #0f172a; border-radius: 16px; margin: 0; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg); border: 1px solid #334155; }
+  #qrModal .head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: #1e293b; color: #fff; flex-shrink: 0; font-size: 15px; border-bottom: 1px solid #334155; }
+  #qrModal .head .title { font-weight: 600; flex: 1; }
+  #qrModal .body { flex: 1; position: relative; background: #000; overflow: hidden; }
+  #qrModal video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #qrModal .scanline { position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #38bdf8, transparent); animation: scan 2s ease-in-out infinite; top: 0; box-shadow: 0 0 10px #38bdf8; }
+  @keyframes scan { 0%, 100% { top: 5%; } 50% { top: 95%; } }
+  #qrModal .foot { padding: 12px 20px; font-size: 13px; color: #94a3b8; background: #1e293b; flex-shrink: 0; border-top: 1px solid #334155; }
+  #qrModal .foot code { background: #334155; color: #f8fafc; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+
+  /* ================== MOBILE RESPONSIVE ================== */
+  @media screen and (max-width: 768px) {
+    /* Prevent iOS Safari auto-zoom on input focus */
+    input[type="text"], input[type="number"], .label-input {
+      font-size: 16px !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    body {
+      padding: 16px 12px;
+    }
+
+    .page-header {
+      margin-bottom: 14px;
+    }
+    .page-header h1 {
+      font-size: 20px;
+    }
+
+    .panel {
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .top-bar {
+      padding: 12px;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .top-bar .ip-box {
+      flex: 1 1 100%;
+      min-height: 44px;
+    }
+    .top-bar button {
+      flex: 1 1 calc(50% - 4px);
+      min-height: 42px;
+      padding: 10px 10px;
+      font-size: 13px;
+    }
+
+    #progressContainer {
+      padding: 12px 14px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .section-title {
+      margin: 22px 0 10px;
+      font-size: 15px;
+    }
+
+    .empty {
+      padding: 22px 14px;
+      font-size: 13px;
+    }
+
+    #configModal .modal-content {
+      padding: 18px;
+    }
+    .modal-actions {
+      flex-direction: column-reverse;
+    }
+    .modal-actions button {
+      width: 100%;
+      min-height: 42px;
+    }
+
+    #qrModal .panel {
+      inset: 16px;
+      border-radius: 14px;
+    }
+    #qrModal .head, #qrModal .foot {
+      padding: 12px 14px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Page Header with Embplayer Label -->
+<header class="page-header">
+  <h1>Embplayers</h1>
+</header>
+
+<!-- Top Bar: IP Box, Results Toggle, QR Scan, Scan Action, and Settings -->
+<div class="top-bar">
+  <input id="topDeviceUrl" class="ip-box" type="text" placeholder="http://192.168.0.1:8080" autocomplete="off" spellcheck="false" title="Device IP or URL">
+  <button id="btnToggleResults" class="icon"><span>▶ Scan Results</span></button>
+  <button id="topQrBtn" class="icon" title="Scan QR code">📷 QR Code</button>
+  <button id="btnOpenConfig" title="Settings">⚙️ Settings</button>
+  <button id="btnRunScan" class="primary" title="Run network scan">🚀 Run Scan</button>
+</div>
+
+<div id="httpsWarn" class="err hidden">
+  <span>⚠️ This page is served over <strong>HTTPS</strong>, so probing <code>http://192.168.x.x:port</code> will fail due to mixed content restrictions. Serve this page from <code>http://localhost:…</code> instead.</span>
+</div>
+<div id="cameraWarn" class="warn hidden">
+  <span>📷 Camera unavailable here (this page is not on <code>localhost</code> or <code>https://</code>). QR scanning is disabled, but you can still type the URL manually.</span>
+</div>
+
+<!-- Results Container (Unified Box - Hidden by Default) -->
+<div id="resultsContainer" class="panel" style="display: none;">
+  <!-- Progress Area inside Scan Results box -->
+  <div id="progressContainer" class="hidden">
+    <div id="statusLine">
+      <span id="statusText">Ready.</span>
+      <button id="stopBtn" disabled class="danger" style="padding: 4px 12px; font-size: 12px; margin-left: 8px;">Stop</button>
+    </div>
+    <div id="progressBar"><div></div></div>
+  </div>
+
+  <div id="summary" style="font-size: 13px; margin: 0 0 14px; color: var(--muted); font-weight: 500;"></div>
+  <div id="resultsTableWrapper" class="table-responsive hidden">
+    <table id="resultsTable">
+      <thead>
+        <tr><th style="min-width: 150px;">IP (Click to open)</th><th>Label / Save Status</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div id="emptyState" class="empty">No scan results yet. Click "Run Scan" to scan the network.</div>
+</div>
+
+<!-- Saved Links Section -->
+<div class="section-title">⭐ Saved Devices</div>
+<div id="savedTableWrapper" class="table-responsive hidden">
+  <table id="savedTable">
+    <thead>
+      <tr><th style="min-width: 190px;">URL / IP</th><th>Label</th><th style="width: 72px; text-align: right;">Action</th></tr>
+    </thead>
+    <tbody id="savedTbody"></tbody>
+  </table>
+</div>
+<div id="savedEmptyState" class="panel empty" style="margin-bottom: 20px;">No saved links yet. Click the save icon next to any scanned device to add it here and edit its label.</div>
+
+<!-- ================== CONFIG MODAL ================== -->
+<div id="configModal" class="hidden" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h2>Scan Options</h2>
+      <button id="btnModalClose" class="close-x" title="Close">✕</button>
+    </div>
+
+    <div class="row">
+      <div class="field" style="flex: 1 1 140px;">
+        <label for="timeout">Timeout (ms)</label>
+        <input id="timeout" type="number" value="1500" min="100" max="10000">
+      </div>
+      <div class="field" style="flex: 1 1 140px;">
+        <label for="conc">Concurrency</label>
+        <input id="conc" type="number" value="50" min="1" max="200">
+      </div>
+    </div>
+    <div class="row" style="margin-top: 16px;">
+      <div class="checkbox-row">
+        <input id="watchMode" type="checkbox">
+        <label for="watchMode" style="margin: 0;">Watch mode — re-scan every</label>
+        <input id="watchInterval" type="number" value="30" min="5" max="600" style="width: 80px;">
+        <span>seconds</span>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="btnModalCancel">Cancel</button>
+      <button id="btnModalSave" class="primary">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================== FULLSCREEN VIEWER ================== -->
+<div id="viewer" class="hidden" role="dialog" aria-modal="true">
+  <iframe id="viewerFrame" src="about:blank" referrerpolicy="no-referrer"></iframe>
+  <div class="toolbar">
+    <button id="viewerReload" title="Reload embedded page">🔄</button>
+    <button id="viewerClose" class="backbtn" title="Back to selection (Esc)">
+      <span aria-hidden="true">←</span><span>Back</span>
+    </button>
+  </div>
+</div>
+
+<!-- ================== QR SCANNER ================== -->
+<div id="qrModal" class="hidden" role="dialog" aria-modal="true">
+  <div class="backdrop" id="qrBackdrop"></div>
+  <div class="panel">
+    <div class="head">
+      <span class="title">Scan QR Code</span>
+      <button id="qrCancel" style="padding: 6px 12px; font-size: 13px;">Cancel</button>
+    </div>
+    <div class="body">
+      <video id="qrVideo" autoplay playsinline muted></video>
+      <div class="scanline"></div>
+    </div>
+    <div class="foot">Point the camera at a QR code containing a URL like <code>http://192.168.0.1:8080</code></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+const topDeviceUrl = $("topDeviceUrl"), topQrBtn = $("topQrBtn");
+const btnOpenConfig = $("btnOpenConfig"), btnRunScan = $("btnRunScan");
+
+const configModal = $("configModal"), btnModalClose = $("btnModalClose"), btnModalCancel = $("btnModalCancel"), btnModalSave = $("btnModalSave");
+const timeoutInput = $("timeout"), concInput = $("conc");
+const watchToggle = $("watchMode"), watchInput = $("watchInterval");
+
+const stopBtn = $("stopBtn"), progressContainer = $("progressContainer"), progressBar = $("progressBar").firstElementChild;
+const statusText = $("statusText"), summaryEl = $("summary");
+const resultsTableWrapper = $("resultsTableWrapper"), tableEl = $("resultsTable"), tbody = tableEl.querySelector("tbody"), emptyState = $("emptyState");
+const resultsContainer = $("resultsContainer"), btnToggleResults = $("btnToggleResults");
+const savedTableWrapper = $("savedTableWrapper"), savedTable = $("savedTable"), savedTbody = $("savedTbody"), savedEmptyState = $("savedEmptyState");
+const httpsWarn = $("httpsWarn"), cameraWarn = $("cameraWarn");
+
+const viewer = $("viewer"), viewerFrame = $("viewerFrame");
+const viewerReload = $("viewerReload"), viewerClose = $("viewerClose");
+
+const qrModal = $("qrModal"), qrVideo = $("qrVideo"), qrCancel = $("qrCancel"), qrBackdrop = $("qrBackdrop");
+
+const LSK = { url: "lanScanner.url", subnet: "lanScanner.subnet", port: "lanScanner.port", labels: "lanScanner.labels", saved: "lanScanner.savedLinks" };
+
+const state = {
+  running: false, stopRequested: false, watchTimer: null, resultsVisible: false,
+  labels: {}, savedLinks: [], lastOpenList: [], currentViewerUrl: null,
+  parsed: null, storedSubnet: null, storedPort: null, targetIp: null, targetPort: null
+};
+
+// ---------- Dropdown toggle for results (Default closed) ----------
+btnToggleResults.addEventListener("click", () => {
+  state.resultsVisible = !state.resultsVisible;
+  if(state.resultsVisible){
+    resultsContainer.style.display = "block";
+    btnToggleResults.firstElementChild.textContent = "▼ Scan Results";
+  } else {
+    resultsContainer.style.display = "none";
+    btnToggleResults.firstElementChild.textContent = "▶ Scan Results";
+  }
+});
+
+// ---------- storage ----------
+try{ state.labels = JSON.parse(localStorage.getItem(LSK.labels) || "{}") || {}; }catch{}
+try{ state.savedLinks = JSON.parse(localStorage.getItem(LSK.saved) || "[]") || []; }catch{}
+
+const saveLabels = () => { try{ localStorage.setItem(LSK.labels, JSON.stringify(state.labels)) }catch{} };
+const saveSavedLinks = () => { try{ localStorage.setItem(LSK.saved, JSON.stringify(state.savedLinks)) }catch{} };
+
+const saveStored = (url, subnet, port) => { try{ localStorage.setItem(LSK.url, url); localStorage.setItem(LSK.subnet, subnet); localStorage.setItem(LSK.port, String(port)); }catch{} };
+const loadStored = () => {
+  try{
+    state.storedSubnet = localStorage.getItem(LSK.subnet) || null;
+    const p = localStorage.getItem(LSK.port); state.storedPort = p ? parseInt(p, 10) : null;
+    return localStorage.getItem(LSK.url) || null;
+  }catch{ return null; }
+};
+const clearStored = () => {
+  try{ localStorage.removeItem(LSK.url); localStorage.removeItem(LSK.subnet); localStorage.removeItem(LSK.port); }catch{}
+  state.storedSubnet = null; state.storedPort = null; state.parsed = null; state.targetIp = null; state.targetPort = null;
+};
+
+// ---------- UI Flow ----------
+function openConfigModal(){
+  configModal.classList.remove("hidden");
+  timeoutInput.focus();
+}
+function closeConfigModal(){
+  configModal.classList.add("hidden");
+}
+
+btnOpenConfig.addEventListener("click", openConfigModal);
+btnModalClose.addEventListener("click", closeConfigModal);
+btnModalCancel.addEventListener("click", closeConfigModal);
+
+// ---------- warnings ----------
+if(location.protocol === "https:") httpsWarn.classList.remove("hidden");
+if(!window.isSecureContext) cameraWarn.classList.remove("hidden");
+
+// ---------- url parsing ----------
+function parseDeviceUrl(input){
+  if(!input) return { error: "empty" };
+  let s = String(input).trim();
+  if(!s) return { error: "empty" };
+  if(!/^https?:\/\//i.test(s)) s = "http://" + s;
+  let u;
+  try{ u = new URL(s); }catch{ return { error: "Invalid URL" }; }
+  const ip = u.hostname;
+  if(!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return { error: "Host is not an IPv4 address" };
+  if(ip.split(".").some(n => +n > 255)) return { error: "Invalid IPv4 octet" };
+  let port;
+  if(u.port) port = parseInt(u.port, 10);
+  else port = u.protocol === "https:" ? 443 : 80;
+  if(!(port >= 1 && port <= 65535)) return { error: "Invalid port" };
+  const subnet = ip.split(".").slice(0, 3).join(".");
+  if(!isPrivateIp(ip)) return { error: "Not a private LAN address (need 10.x, 172.16–31.x, or 192.168.x)" };
+  return { ip, port, subnet, url: u.href, protocol: u.protocol };
+}
+function isPrivateIp(ip){
+  const p = ip.split(".").map(Number);
+  if(p.length !== 4 || p.some(n => isNaN(n))) return false;
+  return p[0] === 10 || (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && p[1] === 168);
+}
+
+// ---------- parsed-state UI ----------
+function updateMainTarget(){
+  if(state.parsed && !state.parsed.error){
+    state.targetIp = state.parsed.ip;
+    state.targetPort = state.parsed.port;
+  }else if(state.storedSubnet && state.storedPort){
+    state.targetIp = null;
+    state.targetPort = state.storedPort;
+  }else{
+    state.targetIp = null;
+    state.targetPort = null;
+  }
+  renderSavedList();
+}
+
+function handleUrlInput(raw){
+  if(!raw.trim()){
+    state.parsed = null;
+    clearStored();
+    updateMainTarget();
+    return;
+  }
+  state.parsed = parseDeviceUrl(raw);
+  if(state.parsed && !state.parsed.error){
+    saveStored(state.parsed.url, state.parsed.subnet, state.parsed.port);
+    state.storedSubnet = state.parsed.subnet;
+    state.storedPort = state.parsed.port;
+  }
+  updateMainTarget();
+}
+
+let urlDebounce = null;
+topDeviceUrl.addEventListener("input", (e) => {
+  clearTimeout(urlDebounce);
+  urlDebounce = setTimeout(() => handleUrlInput(e.target.value), 200);
+});
+topDeviceUrl.addEventListener("blur", (e) => handleUrlInput(e.target.value));
+topDeviceUrl.addEventListener("keydown", (e) => { if(e.key === "Enter"){ handleUrlInput(e.target.value); btnRunScan.click(); } });
+
+// ---------- probe ----------
+async function probe(ip, port, timeout){
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeout);
+  const start = performance.now();
+  try{
+    await fetch(`http://${ip}:${port}/`, { mode: "no-cors", cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: ctrl.signal });
+    return { ip, open: true, ms: performance.now() - start };
+  }catch(err){
+    return { ip, open: false, ms: performance.now() - start, err: err.name };
+  }finally{ clearTimeout(t); }
+}
+
+// ---------- FULLSCREEN VIEWER ----------
+function openViewer(ip, port){
+  const url = `http://${ip}:${port}/`;
+  state.currentViewerUrl = url;
+  viewerFrame.src = url;
+  viewer.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+function closeViewer(){
+  viewer.classList.add("hidden");
+  viewerFrame.src = "about:blank";
+  state.currentViewerUrl = null;
+  document.body.style.overflow = "";
+}
+viewerClose.addEventListener("click", closeViewer);
+document.addEventListener("keydown", (e) => {
+  if(e.key !== "Escape") return;
+  if(!viewer.classList.contains("hidden")) closeViewer();
+  if(!qrModal.classList.contains("hidden")) stopQR();
+  if(!configModal.classList.contains("hidden")) closeConfigModal();
+});
+viewerReload.addEventListener("click", () => {
+  const u = state.currentViewerUrl; if(!u) return;
+  viewerFrame.src = "about:blank";
+  requestAnimationFrame(() => { viewerFrame.src = u; });
+});
+
+// ---------- saved links helpers ----------
+function isLinkSaved(ip, port){
+  const url = `http://${ip}:${port}/`;
+  return state.savedLinks.some(item => item.url === url);
+}
+
+function toggleSaveLink(ip, port){
+  const url = `http://${ip}:${port}/`;
+  const existingLabel = (state.labels[ip] && state.labels[ip].label) ? state.labels[ip].label : "";
+  const idx = state.savedLinks.findIndex(item => item.url === url);
+  if(idx >= 0){
+    state.savedLinks.splice(idx, 1);
+  } else {
+    state.savedLinks.push({ url, ip, port, label: existingLabel });
+  }
+  saveSavedLinks();
+  renderSavedList();
+  if(!state.running && state.targetPort){
+    renderList(state.lastOpenList, state.targetPort, false);
+  }
+}
+
+function renderSavedList(){
+  if(!state.savedLinks.length){
+    savedTableWrapper.classList.add("hidden");
+    savedEmptyState.classList.remove("hidden");
+    return;
+  }
+  savedEmptyState.classList.add("hidden");
+  savedTableWrapper.classList.remove("hidden");
+  savedTbody.innerHTML = "";
+
+  for(const item of state.savedLinks){
+    const tr = document.createElement("tr");
+    const port = item.port || 8080;
+
+    const tdUrl = document.createElement("td");
+    tdUrl.className = "ip";
+    tdUrl.textContent = item.url;
+    tdUrl.title = `Open ${item.url} fullscreen`;
+    tdUrl.addEventListener("click", () => openViewer(item.ip, port));
+
+    const tdLabel = document.createElement("td");
+    const cellActions = document.createElement("div");
+    cellActions.className = "cell-actions";
+
+    const labelText = document.createElement("span");
+    const currentLabel = item.label || "";
+    labelText.textContent = currentLabel || "Add label...";
+    if(!currentLabel){
+      labelText.className = "label-text empty";
+    } else {
+      labelText.className = "label-text";
+      labelText.addEventListener("click", () => openViewer(item.ip, port));
+    }
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "edit-icon";
+    editBtn.innerHTML = "✏️";
+    editBtn.title = "Edit label";
+
+    const editContainer = document.createElement("div");
+    editContainer.className = "label-edit-container";
+
+    const editInput = document.createElement("input");
+    editInput.type = "text";
+    editInput.className = "label-input";
+    editInput.value = currentLabel;
+    editInput.placeholder = "Enter label...";
+
+    const submitBtn = document.createElement("button");
+    submitBtn.className = "primary";
+    submitBtn.style.padding = "6px 12px";
+    submitBtn.style.fontSize = "12px";
+    submitBtn.textContent = "Submit";
+
+    editContainer.append(editInput, submitBtn);
+
+    function startEdit(){
+      labelText.style.display = "none";
+      editBtn.style.display = "none";
+      editContainer.style.display = "flex";
+      editInput.focus();
+    }
+
+    function finishEdit(){
+      editContainer.style.display = "none";
+      labelText.style.display = "block";
+      editBtn.style.display = "block";
+      const newVal = editInput.value.trim();
+      item.label = newVal;
+
+      // Sync label with scan results dictionary
+      if(state.labels[item.ip]){
+        state.labels[item.ip].label = newVal;
+        saveLabels();
+      }
+      saveSavedLinks();
+
+      labelText.textContent = newVal || "Add label...";
+      if(!newVal){
+        labelText.className = "label-text empty";
+        labelText.onclick = null;
+      } else {
+        labelText.className = "label-text";
+        labelText.onclick = () => openViewer(item.ip, port);
+      }
+
+      if(!state.running && state.targetPort){
+        renderList(state.lastOpenList, state.targetPort, false);
+      }
+    }
+
+    editBtn.addEventListener("click", startEdit);
+    submitBtn.addEventListener("click", finishEdit);
+
+    editInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter") finishEdit();
+      else if(e.key === "Escape"){
+        editInput.value = item.label || "";
+        editContainer.style.display = "none";
+        labelText.style.display = "block";
+        editBtn.style.display = "block";
+      }
+    });
+
+    cellActions.append(labelText, editBtn, editContainer);
+    tdLabel.appendChild(cellActions);
+
+    const tdAction = document.createElement("td");
+    tdAction.style.textAlign = "right";
+    
+    const actionDiv = document.createElement("div");
+    actionDiv.className = "saved-actions";
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "delete-icon";
+    removeBtn.innerHTML = "🗑️";
+    removeBtn.title = "Remove from saved links";
+    removeBtn.addEventListener("click", () => {
+      state.savedLinks = state.savedLinks.filter(s => s.url !== item.url);
+      saveSavedLinks();
+      renderSavedList();
+      if(!state.running && state.targetPort){
+        renderList(state.lastOpenList, state.targetPort, false);
+      }
+    });
+
+    actionDiv.appendChild(removeBtn);
+    tdAction.appendChild(actionDiv);
+
+    tr.append(tdUrl, tdLabel, tdAction);
+    savedTbody.appendChild(tr);
+  }
+}
+
+// ---------- results rendering ----------
+function renderList(openList, port, isScanning = false){
+  if(openList.length === 0 && !isScanning){
+    resultsTableWrapper.classList.add("hidden");
+    emptyState.classList.remove("hidden");
+    summaryEl.innerHTML = `No responsive devices found on port <strong>${port}</strong>.`;
+    return;
+  }
+
+  emptyState.classList.add("hidden");
+  resultsTableWrapper.classList.remove("hidden");
+  tbody.innerHTML = "";
+  
+  let list = [...openList];
+  if(state.targetIp){
+    let found = list.find(o => o.ip === state.targetIp);
+    if(found){
+      found.isDirect = true;
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  for(const item of list){
+    const { ip, isDirect } = item;
+    if(!state.labels[ip]){
+      state.labels[ip] = { label: "", firstSeen: now, lastSeen: now };
+    } else {
+      state.labels[ip].lastSeen = now;
+    }
+
+    const tr = document.createElement("tr");
+    tr.className = isDirect ? "target-row" : "known-row";
+
+    const tdIp = document.createElement("td");
+    tdIp.className = "ip"; tdIp.textContent = ip;
+    tdIp.title = `Open http://${ip}:${port}/ fullscreen`;
+    tdIp.addEventListener("click", () => openViewer(ip, port));
+
+    const tdLabel = document.createElement("td");
+    const cellActions = document.createElement("div");
+    cellActions.className = "cell-actions";
+
+    const isSaved = isLinkSaved(ip, port);
+
+    if(isSaved){
+      const savedItem = state.savedLinks.find(s => s.url === `http://${ip}:${port}/`);
+      const indicator = document.createElement("span");
+      indicator.className = "saved-indicator";
+      indicator.textContent = savedItem && savedItem.label ? `Label: "${savedItem.label}" (Saved)` : "(Saved)";
+      cellActions.appendChild(indicator);
+    } else {
+      const labelText = document.createElement("span");
+      const currentLabel = state.labels[ip].label || "";
+      labelText.textContent = currentLabel || "Add label...";
+      if(!currentLabel){
+        labelText.className = "label-text empty";
+      } else {
+        labelText.className = "label-text";
+        labelText.addEventListener("click", () => openViewer(ip, port));
+      }
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "edit-icon";
+      editBtn.innerHTML = "✏️";
+      editBtn.title = "Edit label";
+
+      const editContainer = document.createElement("div");
+      editContainer.className = "label-edit-container";
+
+      const editInput = document.createElement("input");
+      editInput.type = "text";
+      editInput.className = "label-input";
+      editInput.value = currentLabel;
+      editInput.placeholder = "Enter label...";
+
+      const submitBtn = document.createElement("button");
+      submitBtn.className = "primary";
+      submitBtn.style.padding = "6px 12px";
+      submitBtn.style.fontSize = "12px";
+      submitBtn.textContent = "Submit";
+
+      editContainer.append(editInput, submitBtn);
+
+      function startEdit(){
+        labelText.style.display = "none";
+        editBtn.style.display = "none";
+        editContainer.style.display = "flex";
+        editInput.focus();
+      }
+
+      function finishEdit(){
+        editContainer.style.display = "none";
+        labelText.style.display = "block";
+        editBtn.style.display = "block";
+        const newVal = editInput.value.trim();
+        state.labels[ip].label = newVal;
+        saveLabels();
+        labelText.textContent = newVal || "Add label...";
+        
+        if(!newVal){
+          labelText.className = "label-text empty";
+          labelText.onclick = null;
+        } else {
+          labelText.className = "label-text";
+          labelText.onclick = () => openViewer(ip, port);
+        }
+      }
+
+      editBtn.addEventListener("click", startEdit);
+      submitBtn.addEventListener("click", finishEdit);
+      
+      editInput.addEventListener("keydown", (e) => {
+        if(e.key === "Enter") finishEdit();
+        else if(e.key === "Escape"){
+          editInput.value = state.labels[ip].label || "";
+          editContainer.style.display = "none";
+          labelText.style.display = "block";
+          editBtn.style.display = "block";
+        }
+      });
+
+      cellActions.append(labelText, editBtn, editContainer);
+    }
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = isSaved ? "save-link-btn saved" : "save-link-btn";
+    saveBtn.innerHTML = isSaved ? "⭐ Saved" : "☆ Save";
+    saveBtn.title = isSaved ? "Remove from saved links" : "Save this link";
+    saveBtn.addEventListener("click", () => { toggleSaveLink(ip, port); });
+
+    cellActions.appendChild(saveBtn);
+    tdLabel.appendChild(cellActions);
+
+    tr.append(tdIp, tdLabel);
+    tbody.appendChild(tr);
+  }
+  saveLabels();
+
+  if(isScanning){
+    summaryEl.innerHTML = `Scanning network... Found <strong>${openList.length}</strong> device${openList.length === 1 ? "" : "s"} so far.`;
+  } else {
+    const hasTargetHit = list.some(o => o.isDirect);
+    const tgtTxt = hasTargetHit ? ` <span style="color:var(--muted)">(🎯 = target)</span>` : "";
+    summaryEl.innerHTML = `Found <strong>${openList.length}</strong> device${openList.length === 1 ? "" : "s"} on port <strong>${port}</strong>.` + tgtTxt + ` <span style="color:var(--muted)">Click an IP to open it fullscreen.</span>`;
+  }
+}
+
+// ---------- main actions ----------
+btnModalSave.addEventListener("click", () => {
+  closeConfigModal();
+  updateMainTarget();
+});
+
+btnRunScan.addEventListener("click", async () => {
+  if(state.running) return;
+
+  if(topDeviceUrl.value.trim()){
+    handleUrlInput(topDeviceUrl.value);
+  }
+
+  let subnet = null, port = 8080, targetIp = null;
+  if(state.parsed && !state.parsed.error){
+    subnet = state.parsed.subnet;
+    port = state.parsed.port;
+    targetIp = state.parsed.ip;
+  }else if(state.storedSubnet && state.storedPort){
+    subnet = state.storedSubnet;
+    port = state.storedPort;
+    targetIp = state.targetIp;
+  }
+
+  if(!subnet){
+    alert("Please enter a valid Device URL with a port in the top bar first.");
+    topDeviceUrl.focus();
+    return;
+  }
+
+  const timeout = parseInt(timeoutInput.value, 10);
+  const concurrency = parseInt(concInput.value, 10);
+
+  if(!(timeout >= 100 && timeout <= 10000)){ alert("Invalid timeout (100–10000 ms)."); return; }
+  if(!(concurrency >= 1 && concurrency <= 200)){ alert("Invalid concurrency (1–200)."); return; }
+
+  // Auto-open results dropdown when scan starts so progress is visible
+  if(!state.resultsVisible){
+    state.resultsVisible = true;
+    resultsContainer.style.display = "block";
+    btnToggleResults.firstElementChild.textContent = "▼ Scan Results";
+  }
+
+  state.running = true; state.stopRequested = false;
+  btnRunScan.disabled = true; btnOpenConfig.disabled = true; topQrBtn.disabled = true; topDeviceUrl.disabled = true;
+  stopBtn.disabled = false;
+  
+  progressContainer.classList.remove("hidden");
+  progressBar.style.width = "0%";
+  
+  let openDevices = [];
+  renderList(openDevices, port, true);
+  
+  statusText.textContent = `Probing target link first...`;
+
+  // 1. First probe given target link directly
+  if(targetIp){
+    const targetProbe = await probe(targetIp, port, timeout);
+    if(targetProbe.open){
+      openDevices.push({ ip: targetIp });
+      state.lastOpenList = [...openDevices];
+      renderList(openDevices, port, true);
+    }
+  }
+
+  statusText.textContent = `Scanning subnet ${subnet}.0/24 on port ${port}…`;
+
+  const t0 = performance.now(); let last = 0;
+  try{
+    const ips = Array.from({ length: 254 }, (_, i) => `${subnet}.${i + 1}`);
+    let cursor = 0, done = 0;
+
+    async function worker(){
+      while(cursor < ips.length && !state.stopRequested){
+        const ip = ips[cursor++];
+        const r = await probe(ip, port, timeout);
+        done++;
+        if(r.open){
+          if(!openDevices.some(d => d.ip === ip)){
+            openDevices.push({ ip });
+            openDevices.sort((a, b) => +a.ip.split(".").pop() - +b.ip.split(".").pop());
+            state.lastOpenList = [...openDevices];
+            // Live render updates as devices are found
+            renderList(openDevices, port, true);
+          }
+        }
+        const now = performance.now();
+        if(now - last > 120 || done === ips.length){
+          last = now;
+          statusText.textContent = `${done}/${ips.length} scanned — Found ${openDevices.length} device(s)`;
+          progressBar.style.width = ((done / ips.length) * 100).toFixed(1) + "%";
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, ips.length) }, worker));
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    progressBar.style.width = "100%";
+    statusText.textContent = (state.stopRequested ? "Stopped" : "Done") + ` — ${openDevices.length} device(s) found in ${elapsed}s.`;
+    
+    state.lastOpenList = openDevices;
+    renderList(openDevices, port, false);
+  }catch(e){
+    statusText.textContent = "❌ Scan failed: " + e.message;
+  }finally{
+    state.running = false;
+    btnRunScan.disabled = false;
+    btnOpenConfig.disabled = false;
+    topQrBtn.disabled = false;
+    topDeviceUrl.disabled = false;
+    stopBtn.disabled = true;
+  }
+});
+
+// ---------- watch ----------
+function scheduleWatch(){
+  if(state.watchTimer){ clearInterval(state.watchTimer); state.watchTimer = null; }
+  if(!watchToggle.checked) return;
+  const secs = Math.max(5, Math.min(600, parseInt(watchInput.value, 10) || 30));
+  state.watchTimer = setInterval(() => { if(!state.running) btnRunScan.click(); }, secs * 1000);
+}
+stopBtn.addEventListener("click", () => { state.stopRequested = true; });
+watchToggle.addEventListener("change", scheduleWatch);
+watchInput.addEventListener("change", scheduleWatch);
+
+// ================== QR SCANNER ==================
+let qrStream = null, qrRaf = null, qrDetector = null, qrMode = null;
+
+function loadScript(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+async function initQR(){
+  if(qrMode) return qrMode;
+  if("BarcodeDetector" in window){
+    try{
+      qrDetector = new BarcodeDetector({ formats: ["qr_code"] });
+      qrMode = "native";
+      return qrMode;
+    }catch{}
+  }
+  if(!window.jsQR){
+    try{ await loadScript("qr.js"); }
+    catch{ return null; }
+  }
+  qrMode = "jsqr";
+  return qrMode;
+}
+
+async function startQR(){
+  if(!window.isSecureContext){
+    alert("Camera requires a secure context.\nOpen this page from http://localhost:… or https://…");
+    return;
+  }
+  const mode = await initQR();
+  if(!mode){
+    alert("QR scanning needs either Chrome/Edge (native BarcodeDetector) or internet access to load jsQR.");
+    return;
+  }
+  try{
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+  }catch(e1){
+    try{ qrStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+    catch(e2){
+      const msg = e2.name === "NotAllowedError" ? "Camera permission denied." :
+                  e2.name === "NotFoundError" ? "No camera found." :
+                  "Camera error: " + e2.message;
+      alert(msg);
+      return;
+    }
+  }
+  qrVideo.srcObject = qrStream;
+  await qrVideo.play().catch(() => {});
+  qrModal.classList.remove("hidden");
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  let lastScan = 0;
+
+  const tick = (ts) => {
+    if(!qrStream || !qrStream.active) return;
+    if(ts - lastScan > 140){ lastScan = ts; tryScan(); }
+    qrRaf = requestAnimationFrame(tick);
+  };
+
+  async function tryScan(){
+    let found = null;
+    if(qrMode === "native" && qrDetector){
+      try{
+        const codes = await qrDetector.detect(qrVideo);
+        if(codes.length) found = codes[0].rawValue;
+      }catch{}
+    }else if(window.jsQR){
+      if(qrVideo.readyState === qrVideo.HAVE_ENOUGH_DATA){
+        canvas.width = qrVideo.videoWidth;
+        canvas.height = qrVideo.videoHeight;
+        ctx.drawImage(qrVideo, 0, 0);
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(img.data, img.width, img.height);
+        if(code) found = code.data;
+      }
+    }
+    if(found) onQRResult(found);
+  }
+
+  qrRaf = requestAnimationFrame(tick);
+}
+
+function stopQR(){
+  if(qrRaf){ cancelAnimationFrame(qrRaf); qrRaf = null; }
+  if(qrStream){ qrStream.getTracks().forEach(t => t.stop()); qrStream = null; }
+  qrVideo.srcObject = null;
+  qrModal.classList.add("hidden");
+}
+
+function onQRResult(text){
+  stopQR();
+  const clean = text.trim();
+  topDeviceUrl.value = clean;
+  handleUrlInput(clean);
+}
+
+topQrBtn.addEventListener("click", startQR);
+qrCancel.addEventListener("click", stopQR);
+qrBackdrop.addEventListener("click", stopQR);
+
+// ---------- init ----------
+(function(){
+  const storedUrl = loadStored();
+  if(storedUrl){
+    topDeviceUrl.value = storedUrl;
+    handleUrlInput(storedUrl);
+  }
+  renderSavedList();
+})();
+</script>
+</body>
+</html>
