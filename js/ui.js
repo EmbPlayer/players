@@ -76,10 +76,11 @@ function openViewer(ip, port){
   saveViewerState(ip, port);
 }
 
-/* ---------- viewer label chip ---------- */
+/* ---------- viewer label chip + toggle ---------- */
 function updateViewerLabel(ip, port){
-  const el = document.getElementById("viewerLabel");
-  if(!el) return;
+  const chip = document.getElementById("viewerLabel");
+  const btn  = document.getElementById("viewerLabelToggle");
+  if(!chip || !btn) return;
 
   let label = "";
 
@@ -96,14 +97,50 @@ function updateViewerLabel(ip, port){
     if(saved && saved.label) label = saved.label;
   }
 
+  /* Remember current label so the toggle handler can use it. */
+  state.currentViewerLabel = label;
+
   if(label){
-    el.textContent = "📌 " + label;
-    el.title = label;
-    el.classList.remove("hidden");
+    chip.textContent = "📌 " + label;
+    chip.title = label;
+    chip.classList.add("hidden");          /* starts hidden — user toggles */
+
+    btn.classList.remove("hidden");
+    btn.classList.remove("active");
+    btn.disabled = false;
+    btn.title = "Show label";
+    btn.setAttribute("aria-label", "Show label");
   } else {
-    el.textContent = "";
-    el.removeAttribute("title");
-    el.classList.add("hidden");
+    chip.textContent = "";
+    chip.removeAttribute("title");
+    chip.classList.add("hidden");
+
+    btn.classList.add("hidden");
+    btn.classList.remove("active");
+    btn.disabled = true;
+    btn.title = "No label";
+    btn.setAttribute("aria-label", "No label");
+  }
+}
+
+function toggleViewerLabel(){
+  const chip = document.getElementById("viewerLabel");
+  const btn  = document.getElementById("viewerLabelToggle");
+  if(!chip || !btn) return;
+
+  if(!state.currentViewerLabel) return;   /* nothing to toggle */
+
+  const isHidden = chip.classList.contains("hidden");
+  if(isHidden){
+    chip.classList.remove("hidden");
+    btn.classList.add("active");
+    btn.title = "Hide label";
+    btn.setAttribute("aria-label", "Hide label");
+  } else {
+    chip.classList.add("hidden");
+    btn.classList.remove("active");
+    btn.title = "Show label";
+    btn.setAttribute("aria-label", "Show label");
   }
 }
 
@@ -111,12 +148,19 @@ function closeViewer(){
   viewer.classList.add("hidden");
   viewerFrame.src = "about:blank";
   state.currentViewerUrl = null;
+  state.currentViewerLabel = "";
   document.body.style.overflow = "";
   clearViewerState();
-  updateViewerLabel("", 0);   // reset the chip
+  updateViewerLabel("", 0);   /* reset chip + toggle */
 }
 
 viewerClose.addEventListener("click", closeViewer);
+
+/* Wire the label toggle button (element exists at script load time). */
+(function wireViewerLabelToggle(){
+  const btn = document.getElementById("viewerLabelToggle");
+  if(btn) btn.addEventListener("click", toggleViewerLabel);
+})();
 
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
