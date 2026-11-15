@@ -806,6 +806,24 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
 }
 #viewer .toolbar .backbtn:hover{ background:#15803d; border-color:#15803d; }
 
+/* --- label chip inside the toolbar --- */
+#viewer .toolbar .viewer-label{
+  max-width:min(40vw, 220px);
+  padding:6px 12px;
+  font-size:12px;
+  font-weight:600;
+  line-height:1.4;
+  letter-spacing:.01em;
+  color:#fef9c3;
+  background:rgba(254,249,195,.14);
+  border:1px solid rgba(254,249,195,.35);
+  border-radius:10px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#viewer .toolbar .viewer-label.hidden{ display:none !important; }
+
 /* ============================================================
    TOASTS
    ============================================================ */
@@ -1041,6 +1059,12 @@ td.ip:hover{ color:var(--primary-hover); text-decoration:underline; text-underli
     min-height:40px;
     padding:7px 12px;
     border-radius:10px;
+  }
+  #viewer .toolbar .viewer-label{
+    max-width:min(42vw, 150px);
+    padding:5px 10px;
+    font-size:11px;
+    border-radius:9px;
   }
 
   /* banner + gate responsiveness */
