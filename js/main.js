@@ -2,8 +2,14 @@
 
 /* ============================================================
    MAIN: app initialisation — restore last scan, saved devices,
-   URL query param (?device=…), stored URL and viewer session.
-   Loaded last, after all helpers are defined.
+   URL query params (?device=… / ?load=…), stored URL and
+   viewer session. Loaded last, after all helpers are defined.
+
+   Query params:
+     ?device=<url>  → parse, render, AND open the fullscreen viewer
+     ?load=<url>    → parse, render only (no viewer launch)
+
+   If both are present, ?device= wins.
    ============================================================ */
 
 (function(){
@@ -18,23 +24,30 @@
   const rv = localStorage.getItem(LSK.resultsVisible);
   setResultsVisible(rv === "1");
 
-  /* ---------- ?device=… deep link ---------- */
+  /* ---------- ?device=… / ?load=… deep link ---------- */
   const params = new URLSearchParams(location.search);
   const deviceParam = params.get("device");
+  const loadParam   = params.get("load");
 
-  if(deviceParam){
+  /* ?device wins if both are present (stronger action). */
+  const targetParam      = deviceParam || loadParam;
+  const shouldOpenViewer = !!deviceParam;
+
+  if(targetParam){
     try{
       history.replaceState(null, "", location.pathname + location.hash);
     }catch(_){}
 
-    topDeviceUrl.value = deviceParam;
-    handleUrlInput(deviceParam);
+    topDeviceUrl.value = targetParam;
+    handleUrlInput(targetParam);
 
     if(state.parsed && !state.parsed.error){
       const { ip, port } = state.parsed;
       state.lastOpenList = [{ ip, isDirect: true }];
       renderList(state.lastOpenList, port, false);
-      openViewer(ip, port);
+      if(shouldOpenViewer){
+        openViewer(ip, port);
+      }
     }
     renderSavedList();
     return;
