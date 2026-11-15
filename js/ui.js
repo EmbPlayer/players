@@ -62,9 +62,8 @@ if(location.protocol === "https:") httpsWarn.classList.remove("hidden");
    FULLSCREEN VIEWER
    ============================================================ */
 
-/* Grab references once — they never change. */
-const viewerLabelChip = document.getElementById("viewerLabel");
-const viewerLabelBtn  = document.getElementById("viewerLabelToggle");
+/* Grab the label button once — it never leaves the DOM. */
+const viewerLabelBtn = document.getElementById("viewerLabel");
 
 /* ---------- open viewer ---------- */
 function openViewer(ip, port){
@@ -83,16 +82,14 @@ function openViewer(ip, port){
   saveViewerState(ip, port);
 }
 
-/* ---------- resolve current label for this ip/port ---------- */
+/* ---------- resolve label for the current ip/port ---------- */
 function resolveViewerLabel(ip, port){
   if(!ip) return "";
 
-  /* 1. label from the scanned-device store */
   if(state.labels && state.labels[ip] && state.labels[ip].label){
     return state.labels[ip].label;
   }
 
-  /* 2. label from the saved-links list */
   if(Array.isArray(state.savedLinks)){
     const saved = state.savedLinks.find(
       s => s.ip === ip && (s.port === port || (!s.port && port === 8080))
@@ -103,57 +100,45 @@ function resolveViewerLabel(ip, port){
   return "";
 }
 
-/* ---------- refresh chip + toggle button for current device ---------- */
+/* ---------- refresh the label button for a new device ---------- */
 function updateViewerLabel(ip, port){
-  if(!viewerLabelChip || !viewerLabelBtn) return;
+  if(!viewerLabelBtn) return;
 
   const label = resolveViewerLabel(ip, port);
   state.currentViewerLabel = label;
 
-  /* Reset chip → hidden until the user clicks 📌 */
-  viewerLabelChip.classList.add("hidden");
-  viewerLabelChip.removeAttribute("title");
-  viewerLabelChip.textContent = "";
-
-  /* Reset button state */
+  /* Always start in the collapsed "📌" state */
   viewerLabelBtn.classList.remove("active");
-  viewerLabelBtn.removeAttribute("aria-pressed");
+  viewerLabelBtn.setAttribute("aria-pressed", "false");
+  viewerLabelBtn.textContent = "📌";
 
-  if(label){
-    viewerLabelChip.textContent = "📌 " + label;
-    viewerLabelChip.title = label;
-
-    viewerLabelBtn.disabled = false;
-    viewerLabelBtn.title = "Show label";
-    viewerLabelBtn.setAttribute("aria-label", "Show label");
-    viewerLabelBtn.setAttribute("aria-pressed", "false");
-  } else {
-    viewerLabelBtn.disabled = true;
+  if(!label){
+    viewerLabelBtn.hidden = true;
     viewerLabelBtn.title = "No label set for this device";
     viewerLabelBtn.setAttribute("aria-label", "No label");
-    viewerLabelBtn.setAttribute("aria-pressed", "false");
+    return;
   }
+
+  viewerLabelBtn.hidden = false;
+  viewerLabelBtn.title = "Show label";
+  viewerLabelBtn.setAttribute("aria-label", "Show label");
 }
 
-/* ---------- 📌 click: toggle chip visibility ---------- */
+/* ---------- 📌 click → toggle between label text and icon ---------- */
 function toggleViewerLabel(){
-  if(!viewerLabelChip || !viewerLabelBtn) return;
-  if(!state.currentViewerLabel) return;   // nothing to show
+  if(!viewerLabelBtn || !state.currentViewerLabel) return;
 
-  const currentlyHidden = viewerLabelChip.classList.contains("hidden");
+  const nowActive = viewerLabelBtn.classList.toggle("active");
+  viewerLabelBtn.setAttribute("aria-pressed", nowActive ? "true" : "false");
 
-  if(currentlyHidden){
-    viewerLabelChip.classList.remove("hidden");
-    viewerLabelBtn.classList.add("active");
+  if(nowActive){
+    viewerLabelBtn.textContent = state.currentViewerLabel;
     viewerLabelBtn.title = "Hide label";
     viewerLabelBtn.setAttribute("aria-label", "Hide label");
-    viewerLabelBtn.setAttribute("aria-pressed", "true");
   } else {
-    viewerLabelChip.classList.add("hidden");
-    viewerLabelBtn.classList.remove("active");
+    viewerLabelBtn.textContent = "📌";
     viewerLabelBtn.title = "Show label";
     viewerLabelBtn.setAttribute("aria-label", "Show label");
-    viewerLabelBtn.setAttribute("aria-pressed", "false");
   }
 }
 
@@ -169,7 +154,7 @@ function closeViewer(){
   state.currentViewerLabel = "";
   document.body.style.overflow = "";
   clearViewerState();
-  updateViewerLabel("", 0);   // reset chip + button
+  updateViewerLabel("", 0);
 }
 
 viewerClose.addEventListener("click", closeViewer);
