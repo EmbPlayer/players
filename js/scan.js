@@ -145,6 +145,14 @@ btnRunScan.addEventListener("click", async () => {
     state.lastOpenList = openDevices;
     renderList(openDevices, port, false);
 
+    /* If a scan finds nothing on a soft-gate browser, do NOT
+       pretend LAN access is fine. Reset the badge and reopen
+       the banner. */
+    if(openDevices.length === 0 && !state.stopRequested &&
+       typeof reportScanFailure === "function"){
+      reportScanFailure();
+    }
+
   }catch(e){
     statusText.textContent = "❌ Scan failed: " + e.message;
     notify("Scan failed: " + e.message, "error");
