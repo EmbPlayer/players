@@ -18,15 +18,34 @@
       <p class="subtitle">LAN device scanner &amp; launcher</p>
     </div>
   </div>
-  <button id="btnToggleResults" class="toggle-btn" aria-expanded="false">
-    <span>▶ Scan Results</span>
-  </button>
+  <div class="header-actions">
+    <button id="lnBadge" class="ln-badge ln-badge--unknown"
+            type="button"
+            title="Local network access status"
+            aria-label="Local network access status">🌐</button>
+    <button id="btnToggleResults" class="toggle-btn" aria-expanded="false">
+      <span>▶ Scan Results</span>
+    </button>
+  </div>
 </header>
 
 <div id="httpsWarn" class="err hidden">
   <span>⚠️ This page is served over <strong>HTTPS</strong>, so probing
   <code>http://192.168.x.x:port</code> will fail due to mixed content restrictions.
   Serve this page from <code>http://localhost:…</code> instead.</span>
+</div>
+
+<!-- ==================== BROWSER SUPPORT BANNER ==================== -->
+<div id="browserSupportBanner" class="support-banner hidden" role="status">
+  <span class="support-banner-icon" id="bsbIcon" aria-hidden="true">⚠️</span>
+  <div class="support-banner-body">
+    <strong id="bsbTitle">Browser notice</strong>
+    <p id="bsbMsg"></p>
+  </div>
+  <div class="support-banner-actions">
+    <button id="bsbTest" type="button">Test</button>
+    <button id="bsbDismiss" type="button" title="Dismiss">✕</button>
+  </div>
 </div>
 
 <!-- ==================== RESULTS ==================== -->
@@ -158,6 +177,7 @@
     </ol>
     <div class="ln-actions">
       <button id="lnRetry" class="primary">Allow access</button>
+      <button id="lnTest" class="hidden">Test connectivity</button>
     </div>
     <div class="ln-status" id="lnStatus"></div>
   </div>
@@ -176,7 +196,6 @@
 <script src="js/results.js"></script>
 <script src="js/scan.js"></script>
 <script src="js/main.js"></script>
-<!-- registers the service worker & checks version.json on every load -->
 <script src="js/pwa.js"></script>
 
 </body>
