@@ -139,6 +139,30 @@
   </div>
 </div>
 
+<!-- ==================== LOCAL NETWORK GATE ==================== -->
+<div id="localNetGate" class="hidden" role="alertdialog" aria-modal="true"
+     aria-labelledby="lnTitle">
+  <div class="ln-content">
+    <div class="ln-icon" aria-hidden="true">🌐</div>
+    <h2 id="lnTitle">Local network access required</h2>
+    <p class="ln-msg" id="lnMsg">
+      Embplayers must be granted permission to
+      <strong>access devices on your local network</strong>.
+      Without this, scanning cannot work.
+    </p>
+    <div id="lnDeniedHelp" class="ln-help hidden"></div>
+    <ol class="ln-steps">
+      <li>Click <strong>Allow access</strong> below.</li>
+      <li>When your browser asks, choose <strong>Allow</strong>.</li>
+      <li>The app unlocks automatically once granted.</li>
+    </ol>
+    <div class="ln-actions">
+      <button id="lnRetry" class="primary">Allow access</button>
+    </div>
+    <div class="ln-status" id="lnStatus"></div>
+  </div>
+</div>
+
 <!-- ==================== TOASTS ==================== -->
 <div id="toasts" aria-live="polite"></div>
 
@@ -147,6 +171,7 @@
 <script src="js/storage.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/url.js"></script>
+<script src="js/localnet.js"></script>
 <script src="js/saved.js"></script>
 <script src="js/results.js"></script>
 <script src="js/scan.js"></script>
