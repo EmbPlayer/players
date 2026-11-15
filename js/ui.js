@@ -72,7 +72,39 @@ function openViewer(ip, port){
   viewerFrame.src = url;
   viewer.classList.remove("hidden");
   document.body.style.overflow = "hidden";
+  updateViewerLabel(ip, port);
   saveViewerState(ip, port);
+}
+
+/* ---------- viewer label chip ---------- */
+function updateViewerLabel(ip, port){
+  const el = document.getElementById("viewerLabel");
+  if(!el) return;
+
+  let label = "";
+
+  /* First: label from the scanned-device label store */
+  if(ip && state.labels && state.labels[ip] && state.labels[ip].label){
+    label = state.labels[ip].label;
+  }
+
+  /* Fallback: label from the saved-links list */
+  if(!label && ip && Array.isArray(state.savedLinks)){
+    const saved = state.savedLinks.find(
+      s => s.ip === ip && (s.port === port || (!s.port && port === 8080))
+    );
+    if(saved && saved.label) label = saved.label;
+  }
+
+  if(label){
+    el.textContent = "📌 " + label;
+    el.title = label;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.removeAttribute("title");
+    el.classList.add("hidden");
+  }
 }
 
 function closeViewer(){
@@ -81,6 +113,7 @@ function closeViewer(){
   state.currentViewerUrl = null;
   document.body.style.overflow = "";
   clearViewerState();
+  updateViewerLabel("", 0);   // reset the chip
 }
 
 viewerClose.addEventListener("click", closeViewer);
