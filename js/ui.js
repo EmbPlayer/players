@@ -58,9 +58,16 @@ btnModalSave.addEventListener("click", () => {
 /* ---------- https warning ---------- */
 if(location.protocol === "https:") httpsWarn.classList.remove("hidden");
 
-/* ---------- fullscreen viewer ---------- */
+/* ============================================================
+   FULLSCREEN VIEWER
+   ============================================================ */
+
+/* Grab references once — they never change. */
+const viewerLabelChip = document.getElementById("viewerLabel");
+const viewerLabelBtn  = document.getElementById("viewerLabelToggle");
+
+/* ---------- open viewer ---------- */
 function openViewer(ip, port){
-  /* --- local network access gate (must be granted to open devices) --- */
   if(typeof localNetBlocked === "function" && localNetBlocked()){
     showLocalNetGate();
     notify("Allow local network access before opening devices.", "error");
@@ -76,74 +83,85 @@ function openViewer(ip, port){
   saveViewerState(ip, port);
 }
 
-/* ---------- viewer label chip + toggle ---------- */
-function updateViewerLabel(ip, port){
-  const chip = document.getElementById("viewerLabel");
-  const btn  = document.getElementById("viewerLabelToggle");
-  if(!chip || !btn) return;
+/* ---------- resolve current label for this ip/port ---------- */
+function resolveViewerLabel(ip, port){
+  if(!ip) return "";
 
-  let label = "";
-
-  /* First: label from the scanned-device label store */
-  if(ip && state.labels && state.labels[ip] && state.labels[ip].label){
-    label = state.labels[ip].label;
+  /* 1. label from the scanned-device store */
+  if(state.labels && state.labels[ip] && state.labels[ip].label){
+    return state.labels[ip].label;
   }
 
-  /* Fallback: label from the saved-links list */
-  if(!label && ip && Array.isArray(state.savedLinks)){
+  /* 2. label from the saved-links list */
+  if(Array.isArray(state.savedLinks)){
     const saved = state.savedLinks.find(
       s => s.ip === ip && (s.port === port || (!s.port && port === 8080))
     );
-    if(saved && saved.label) label = saved.label;
+    if(saved && saved.label) return saved.label;
   }
 
-  /* Remember current label so the toggle handler can use it. */
+  return "";
+}
+
+/* ---------- refresh chip + toggle button for current device ---------- */
+function updateViewerLabel(ip, port){
+  if(!viewerLabelChip || !viewerLabelBtn) return;
+
+  const label = resolveViewerLabel(ip, port);
   state.currentViewerLabel = label;
 
+  /* Reset chip → hidden until the user clicks 📌 */
+  viewerLabelChip.classList.add("hidden");
+  viewerLabelChip.removeAttribute("title");
+  viewerLabelChip.textContent = "";
+
+  /* Reset button state */
+  viewerLabelBtn.classList.remove("active");
+  viewerLabelBtn.removeAttribute("aria-pressed");
+
   if(label){
-    chip.textContent = "📌 " + label;
-    chip.title = label;
-    chip.classList.add("hidden");          /* starts hidden — user toggles */
+    viewerLabelChip.textContent = "📌 " + label;
+    viewerLabelChip.title = label;
 
-    btn.classList.remove("hidden");
-    btn.classList.remove("active");
-    btn.disabled = false;
-    btn.title = "Show label";
-    btn.setAttribute("aria-label", "Show label");
+    viewerLabelBtn.disabled = false;
+    viewerLabelBtn.title = "Show label";
+    viewerLabelBtn.setAttribute("aria-label", "Show label");
+    viewerLabelBtn.setAttribute("aria-pressed", "false");
   } else {
-    chip.textContent = "";
-    chip.removeAttribute("title");
-    chip.classList.add("hidden");
-
-    btn.classList.add("hidden");
-    btn.classList.remove("active");
-    btn.disabled = true;
-    btn.title = "No label";
-    btn.setAttribute("aria-label", "No label");
+    viewerLabelBtn.disabled = true;
+    viewerLabelBtn.title = "No label set for this device";
+    viewerLabelBtn.setAttribute("aria-label", "No label");
+    viewerLabelBtn.setAttribute("aria-pressed", "false");
   }
 }
 
+/* ---------- 📌 click: toggle chip visibility ---------- */
 function toggleViewerLabel(){
-  const chip = document.getElementById("viewerLabel");
-  const btn  = document.getElementById("viewerLabelToggle");
-  if(!chip || !btn) return;
+  if(!viewerLabelChip || !viewerLabelBtn) return;
+  if(!state.currentViewerLabel) return;   // nothing to show
 
-  if(!state.currentViewerLabel) return;   /* nothing to toggle */
+  const currentlyHidden = viewerLabelChip.classList.contains("hidden");
 
-  const isHidden = chip.classList.contains("hidden");
-  if(isHidden){
-    chip.classList.remove("hidden");
-    btn.classList.add("active");
-    btn.title = "Hide label";
-    btn.setAttribute("aria-label", "Hide label");
+  if(currentlyHidden){
+    viewerLabelChip.classList.remove("hidden");
+    viewerLabelBtn.classList.add("active");
+    viewerLabelBtn.title = "Hide label";
+    viewerLabelBtn.setAttribute("aria-label", "Hide label");
+    viewerLabelBtn.setAttribute("aria-pressed", "true");
   } else {
-    chip.classList.add("hidden");
-    btn.classList.remove("active");
-    btn.title = "Show label";
-    btn.setAttribute("aria-label", "Show label");
+    viewerLabelChip.classList.add("hidden");
+    viewerLabelBtn.classList.remove("active");
+    viewerLabelBtn.title = "Show label";
+    viewerLabelBtn.setAttribute("aria-label", "Show label");
+    viewerLabelBtn.setAttribute("aria-pressed", "false");
   }
 }
 
+if(viewerLabelBtn){
+  viewerLabelBtn.addEventListener("click", toggleViewerLabel);
+}
+
+/* ---------- close viewer ---------- */
 function closeViewer(){
   viewer.classList.add("hidden");
   viewerFrame.src = "about:blank";
@@ -151,22 +169,14 @@ function closeViewer(){
   state.currentViewerLabel = "";
   document.body.style.overflow = "";
   clearViewerState();
-  updateViewerLabel("", 0);   /* reset chip + toggle */
+  updateViewerLabel("", 0);   // reset chip + button
 }
 
 viewerClose.addEventListener("click", closeViewer);
 
-/* Wire the label toggle button (element exists at script load time). */
-(function wireViewerLabelToggle(){
-  const btn = document.getElementById("viewerLabelToggle");
-  if(btn) btn.addEventListener("click", toggleViewerLabel);
-})();
-
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
-  // If the local-network gate is open, do NOT let Escape dismiss
-  // anything behind it — the user must grant permission first.
   const gate = document.getElementById("localNetGate");
   if(gate && !gate.classList.contains("hidden")) return;
 
