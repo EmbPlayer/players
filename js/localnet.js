@@ -4,16 +4,14 @@
    LOCAL NETWORK ACCESS GATE + BROWSER SUPPORT DETECTION
    ------------------------------------------------------------
    Fully supported  → Chrome 141+ / Edge 141+ (permission API)
-   May have problems→ Brave, Firefox, Samsung, Safari,
-                      old Chrome/Edge, unknown Chromium
-                      → non-blocking yellow banner (dismissible)
-   Definitely broken→ HTTPS mixed content, file://,
-                      permission denied, permission pending
-                      → blocking modal gate + red banner
-
-   Public API (unchanged for scan.js / ui.js):
-     • localNetBlocked()
-     • showLocalNetGate()
+   Brave            → may expose LNA internally but often
+                      throws on navigator.permissions.query.
+                      → soft banner with "Enable / Test" button;
+                        clicking it probes a LAN IP (which fires
+                        Brave's native prompt), then re-queries
+                        the permission and unlocks if granted.
+   Others           → soft banner (may have problems).
+   Hard-blockers    → permission denied / HTTPS / file://.
    ============================================================ */
 
 const LN_PERM    = "local-network-access";
@@ -24,23 +22,17 @@ const MIN_CHROME_VERSION = 141;
 const MIN_EDGE_VERSION   = 141;
 
 const localNetGate = {
-  /* environment */
   isBrave: false, isSamsung: false, isChrome: false,
   isEdge: false, isOpera: false, isFirefox: false, isSafari: false,
   isChromiumFamily: false, isHttps: false, isFileOrigin: false,
   version: { chrome: 0, edge: 0, firefox: 0, samsung: 0, opera: 0 },
 
-  /* permission + mode */
   permissionState: "unknown",   // unknown | granted | prompt | denied | unsupported
-  mode:   "unknown",            // granted | chrome-prompt | chrome-denied |
-                                // https-blocked | file-origin | brave |
-                                // firefox | samsung | safari |
-                                // generic-chromium | unknown
+  mode:   "unknown",
   status: "unknown",
   acknowledged: false,
   probing: false,
 
-  /* DOM */
   gateEl: null, titleEl: null, msgEl: null, helpEl: null, stepsEl: null,
   statusEl: null, retryEl: null, testEl: null,
   badgeEl: null,
@@ -48,7 +40,7 @@ const localNetGate = {
   bsbTestEl: null, bsbDismissEl: null
 };
 
-/* ---------- helpers ---------- */
+/* ---------- fetch helper ---------- */
 function fetchWithTimeout(url, opts, ms){
   if(window.AbortSignal && AbortSignal.timeout){
     return fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });
@@ -59,7 +51,8 @@ function fetchWithTimeout(url, opts, ms){
     .finally(() => clearTimeout(t));
 }
 
-async function queryPermission(){
+/* ---------- permission query with retry ---------- */
+async function queryPermissionOnce(){
   if(!navigator.permissions || typeof navigator.permissions.query !== "function"){
     return "unsupported";
   }
@@ -75,6 +68,31 @@ async function queryPermission(){
   }
 }
 
+/* Brave / some Chromium forks throw on the first query while the
+   permission manager initializes. Retry twice before giving up. */
+async function queryPermission(){
+  let st = await queryPermissionOnce();
+  if(st === "unsupported"){
+    await new Promise(r => setTimeout(r, 150));
+    st = await queryPermissionOnce();
+    if(st === "unsupported"){
+      await new Promise(r => setTimeout(r, 300));
+      st = await queryPermissionOnce();
+    }
+  }
+  return st;
+}
+
+/* Re-query and return { before, now } so callers can tell whether
+   the permission state changed after a probe. */
+async function refreshPermission(){
+  const before = localNetGate.permissionState;
+  const now = await queryPermission();
+  localNetGate.permissionState = now;
+  return { before, now };
+}
+
+/* ---------- environment detection ---------- */
 async function detectBrave(){
   if(!navigator.brave || typeof navigator.brave.isBrave !== "function") return false;
   try{
@@ -107,7 +125,7 @@ function detectEnvironment(){
   g.isFileOrigin = location.protocol === "file:";
 }
 
-/* Used by scan.js / ui.js — only hard-blockers. */
+/* ---------- public API (used by scan.js / ui.js) ---------- */
 function localNetBlocked(){
   const m = localNetGate.mode;
   return m === "chrome-prompt" ||
@@ -116,7 +134,7 @@ function localNetBlocked(){
          m === "file-origin";
 }
 
-/* ---------- DOM ---------- */
+/* ---------- DOM refs ---------- */
 function cacheEls(){
   const g = localNetGate;
   g.gateEl     = document.getElementById("localNetGate");
@@ -153,13 +171,11 @@ function hideBanner(){
   localNetGate.bannerEl.classList.add("hidden");
 }
 
+/* Null-safe: works whether or not #lnTest exists in the HTML. */
 function resetGateButtons(){
   const g = localNetGate;
-  [g.retryEl, g.testEl].forEach(el => {
-    if(!el) return;
-    el.classList.add("hidden");
-    el.disabled = false;
-  });
+  if(g.retryEl){ g.retryEl.classList.add("hidden"); g.retryEl.disabled = false; }
+  if(g.testEl){  g.testEl.classList.add("hidden");  g.testEl.disabled  = false; }
 }
 
 function setBadge(state){
@@ -190,7 +206,15 @@ function recomputeMode(){
 
   if(g.permissionState === "granted") return "granted";
   if(g.permissionState === "prompt")  return "chrome-prompt";
-  if(g.permissionState === "denied")  return "chrome-denied";
+
+  /* Real denial on Chrome → chrome-denied.
+     But on Brave, a "denied" default often just reflects Shields,
+     so route through the Brave soft-gate instead of the Chrome
+     instructions that don't apply. */
+  if(g.permissionState === "denied"){
+    if(g.isBrave) return "brave";
+    return "chrome-denied";
+  }
 
   if(g.isBrave)          return "brave";
   if(g.isFirefox)        return "firefox";
@@ -207,66 +231,78 @@ function renderGateContent(mode){
   resetGateButtons();
 
   if(mode === "chrome-prompt"){
-    g.titleEl.textContent = "Local network access required";
-    g.msgEl.innerHTML =
+    if(g.titleEl) g.titleEl.textContent = "Local network access required";
+    if(g.msgEl) g.msgEl.innerHTML =
       "Chrome needs permission to <strong>access devices on your " +
       "local network</strong>. Without it, scanning cannot work.";
-    g.helpEl.classList.add("hidden");
-    g.stepsEl.classList.remove("hidden");
-    g.stepsEl.innerHTML =
-      "<li>Click <strong>Allow access</strong> below.</li>" +
-      "<li>Chrome will show a prompt — choose <strong>Allow</strong>.</li>" +
-      "<li>The app unlocks automatically once granted.</li>";
-    g.retryEl.classList.remove("hidden");
-    g.retryEl.textContent = "Allow access";
-    g.testEl.classList.remove("hidden");
-    g.statusEl.textContent = "";
+    if(g.helpEl) g.helpEl.classList.add("hidden");
+    if(g.stepsEl){
+      g.stepsEl.classList.remove("hidden");
+      g.stepsEl.innerHTML =
+        "<li>Click <strong>Allow access</strong> below.</li>" +
+        "<li>Chrome will show a prompt — choose <strong>Allow</strong>.</li>" +
+        "<li>The app unlocks automatically once granted.</li>";
+    }
+    if(g.retryEl){
+      g.retryEl.classList.remove("hidden");
+      g.retryEl.textContent = "Allow access";
+    }
+    if(g.testEl) g.testEl.classList.remove("hidden");
+    if(g.statusEl) g.statusEl.textContent = "";
   }
   else if(mode === "chrome-denied"){
-    g.titleEl.textContent = "Local network access denied";
-    g.msgEl.innerHTML =
+    if(g.titleEl) g.titleEl.textContent = "Local network access denied";
+    if(g.msgEl) g.msgEl.innerHTML =
       "Chrome has <strong>denied</strong> access to devices on your " +
       "local network. Scanning will not work until you allow it.";
-    g.helpEl.classList.remove("hidden");
-    g.helpEl.innerHTML =
-      "Click the lock/tune icon in the address bar → " +
-      "<strong>Site settings</strong> → set " +
-      "<strong>Local network access</strong> to <strong>Allow</strong>.";
-    g.stepsEl.classList.add("hidden");
-    g.retryEl.classList.remove("hidden");
-    g.retryEl.textContent = "Try again";
-    g.testEl.classList.remove("hidden");
-    g.statusEl.textContent = "";
+    if(g.helpEl){
+      g.helpEl.classList.remove("hidden");
+      g.helpEl.innerHTML =
+        "Click the lock/tune icon in the address bar → " +
+        "<strong>Site settings</strong> → set " +
+        "<strong>Local network access</strong> to <strong>Allow</strong>.";
+    }
+    if(g.stepsEl) g.stepsEl.classList.add("hidden");
+    if(g.retryEl){
+      g.retryEl.classList.remove("hidden");
+      g.retryEl.textContent = "Try again";
+    }
+    if(g.testEl) g.testEl.classList.remove("hidden");
+    if(g.statusEl) g.statusEl.textContent = "";
   }
   else if(mode === "https-blocked"){
-    g.titleEl.textContent = "Serve this page over http://localhost";
-    g.msgEl.innerHTML =
+    if(g.titleEl) g.titleEl.textContent = "Serve this page over http://localhost";
+    if(g.msgEl) g.msgEl.innerHTML =
       "You're on <strong>HTTPS</strong>. Browsers block requests to " +
       "<code>http://192.168.x.x</code> from HTTPS pages as mixed content.";
-    g.helpEl.classList.remove("hidden");
-    g.helpEl.innerHTML =
-      "Serve this page from a local HTTP server, e.g. " +
-      "<code>python3 -m http.server 8000</code>, then open " +
-      "<code>http://localhost:8000/</code>.";
-    g.stepsEl.classList.add("hidden");
-    g.testEl.classList.remove("hidden");
-    g.statusEl.textContent = "";
+    if(g.helpEl){
+      g.helpEl.classList.remove("hidden");
+      g.helpEl.innerHTML =
+        "Serve this page from a local HTTP server, e.g. " +
+        "<code>python3 -m http.server 8000</code>, then open " +
+        "<code>http://localhost:8000/</code>.";
+    }
+    if(g.stepsEl) g.stepsEl.classList.add("hidden");
+    if(g.testEl) g.testEl.classList.remove("hidden");
+    if(g.statusEl) g.statusEl.textContent = "";
   }
   else if(mode === "file-origin"){
-    g.titleEl.textContent = "Serve this page over http://localhost";
-    g.msgEl.innerHTML =
+    if(g.titleEl) g.titleEl.textContent = "Serve this page over http://localhost";
+    if(g.msgEl) g.msgEl.innerHTML =
       "You opened <code>index.html</code> directly from disk. " +
       "Browsers block network access from <code>file://</code> pages.";
-    g.helpEl.classList.remove("hidden");
-    g.helpEl.innerHTML =
-      "Start a local server in the app folder:<br><br>" +
-      "Python 3: <code>python3 -m http.server 8000</code><br>" +
-      "Node: <code>npx serve .</code><br>" +
-      "PHP: <code>php -S localhost:8000</code><br><br>" +
-      "Then open <code>http://localhost:8000/</code>.";
-    g.stepsEl.classList.add("hidden");
-    g.testEl.classList.remove("hidden");
-    g.statusEl.textContent = "";
+    if(g.helpEl){
+      g.helpEl.classList.remove("hidden");
+      g.helpEl.innerHTML =
+        "Start a local server in the app folder:<br><br>" +
+        "Python 3: <code>python3 -m http.server 8000</code><br>" +
+        "Node: <code>npx serve .</code><br>" +
+        "PHP: <code>php -S localhost:8000</code><br><br>" +
+        "Then open <code>http://localhost:8000/</code>.";
+    }
+    if(g.stepsEl) g.stepsEl.classList.add("hidden");
+    if(g.testEl) g.testEl.classList.remove("hidden");
+    if(g.statusEl) g.statusEl.textContent = "";
   }
 }
 
@@ -278,7 +314,7 @@ function getSupportInfo(){
   if(g.permissionState === "granted" || g.permissionState === "prompt"){
     return { level: "ok" };
   }
-  if(g.permissionState === "denied"){
+  if(g.permissionState === "denied" && !g.isBrave){
     return { level: "error",
       title: "Local network access is blocked",
       msg: "Open this site's settings (lock icon in the address bar) and set " +
@@ -298,67 +334,65 @@ function getSupportInfo(){
            "(mixed content). Serve the app from " +
            "<code>http://localhost</code> instead." };
   }
-
   if(g.isChrome && v.chrome > 0 && v.chrome < MIN_CHROME_VERSION){
     return { level: "warn",
       title: `Chrome ${v.chrome} may have problems`,
       msg: `Local Network Access is fully supported from ` +
            `<strong>Google Chrome ${MIN_CHROME_VERSION}+</strong>. ` +
-           `You're on Chrome ${v.chrome}. Upgrade to Chrome ` +
-           `${MIN_CHROME_VERSION}+ for best results.` };
+           `You're on Chrome ${v.chrome}. Upgrade for best results.` };
   }
   if(g.isEdge && v.edge > 0 && v.edge < MIN_EDGE_VERSION){
     return { level: "warn",
       title: `Edge ${v.edge} may have problems`,
       msg: `Local Network Access is fully supported from ` +
-           `<strong>Edge ${MIN_EDGE_VERSION}+</strong>. ` +
-           `You're on Edge ${v.edge}. Upgrade to Edge ` +
-           `${MIN_EDGE_VERSION}+ for best results.` };
+           `<strong>Edge ${MIN_EDGE_VERSION}+</strong>. Upgrade for best results.` };
   }
   if(g.isBrave){
     return { level: "warn",
       title: "Brave may have problems",
-      msg: "Brave's Shields silently block LAN requests. For best results, " +
-           "use <strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>. " +
-           "If you must use Brave, click the 🦁 lion icon and turn Shields " +
-           "down for this site." };
+      msg: "Brave blocks LAN requests through Shields and does not expose " +
+           "the LNA permission to JavaScript. Click <strong>Enable / Test</strong> " +
+           "below — if your Brave supports LNA, the browser's own " +
+           "<em>access local network</em> prompt will appear. If not, turn off " +
+           "Shields for this site (🦁 lion icon) and click again. " +
+           "For best results, use <strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
   }
   if(g.isSamsung){
     return { level: "warn",
       title: "Samsung Internet may have problems",
       msg: "Samsung Internet usually allows LAN access but lacks the LNA " +
-           "permission. For best results, use " +
-           "<strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
+           "permission. Click <strong>Enable / Test</strong> to check; if it " +
+           "fails, use <strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
   }
   if(g.isFirefox){
     return { level: "warn",
       title: "Firefox may have problems",
       msg: "Firefox does not support the LNA permission. Scanning usually " +
            "works from <code>http://localhost</code> but may be blocked by " +
-           "Enhanced Tracking Protection. For best results, use " +
-           "<strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
+           "Enhanced Tracking Protection. Use <strong>Test</strong> to check. " +
+           "For best results, use <strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
   }
   if(g.isSafari){
     return { level: "warn",
       title: "Safari may have problems",
       msg: "Safari does not support the LNA permission. On iOS, verify " +
-           "Settings → Privacy → Local Network allows Safari. For best " +
-           "results, use <strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
+           "Settings → Privacy → Local Network allows Safari. Use " +
+           "<strong>Test</strong> to check. For best results, use " +
+           "<strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
   }
   if(g.isChromiumFamily){
     return { level: "warn",
       title: "This browser may have problems",
       msg: "This Chromium browser does not expose the LNA permission. " +
-           "Scanning usually works from <code>http://localhost</code> but " +
-           "may be blocked by privacy settings. For best results, use " +
-           "<strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong> or " +
-           "<strong>Edge " + MIN_EDGE_VERSION + "+</strong>." };
+           "Click <strong>Enable / Test</strong> to trigger the browser's " +
+           "native prompt (if supported) or verify connectivity. " +
+           "For best results, use <strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
   }
   return { level: "warn",
     title: "Browser may have problems",
-    msg: "LAN scanning may not work in this browser. For best results, use " +
-         "<strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong> or " +
-         "<strong>Edge " + MIN_EDGE_VERSION + "+</strong>." };
+    msg: "LAN scanning may not work in this browser. Use <strong>Test</strong> " +
+         "to check. For best results, use " +
+         "<strong>Google Chrome " + MIN_CHROME_VERSION + "+</strong>." };
 }
 
 function renderSupportBanner(){
@@ -387,6 +421,9 @@ function renderSupportBanner(){
   }
   if(g.bsbTestEl){
     g.bsbTestEl.style.display = info.level === "error" ? "none" : "";
+    /* Clearer label for browsers where clicking triggers the prompt */
+    g.bsbTestEl.textContent =
+      (g.isBrave || g.isChromiumFamily) ? "Enable / Test" : "Test";
   }
 }
 
@@ -413,7 +450,7 @@ function applyMode(mode){
     return;
   }
 
-  /* Soft "may have problems": app stays usable, yellow banner only */
+  /* Soft "may have problems": app stays usable, banner only. */
   g.status = "granted";
   setBadge("warn");
   hideLocalNetGate();
@@ -428,7 +465,8 @@ function buildProbes(){
     out.push({ ip: state.parsed.ip, port });
   }
   if(state.storedSubnet){
-    out.push({ ip: `${state.storedSubnet}.1`, port });
+    out.push({ ip: `${state.storedSubnet}.1`,   port });
+    out.push({ ip: `${state.storedSubnet}.254`, port });
   }
   out.push({ ip: "192.168.1.1", port: 80 });
   out.push({ ip: "192.168.0.1", port: 80 });
@@ -462,59 +500,104 @@ async function probeAll(timeoutMs){
 }
 
 /* ---------- actions ---------- */
+
+/* Shared: fire probes, wait a moment, re-query permission.
+   Returns { probes, permissionNow }. */
+async function probeAndRefresh(timeoutMs){
+  const r = await probeAll(timeoutMs);
+  /* Give the browser a moment to process the user's answer to its
+     native LNA prompt (if one appeared). */
+  await new Promise(res => setTimeout(res, 400));
+  await refreshPermission();
+  return r;
+}
+
+/* Called by the gate's "Allow access" / "Try again" button
+   (chrome-prompt / chrome-denied / etc). */
 async function triggerAllow(){
   if(localNetGate.probing) return;
   localNetGate.probing = true;
-  if(localNetGate.retryEl) localNetGate.retryEl.disabled = true;
+  if(localNetGate.retryEl)  localNetGate.retryEl.disabled = true;
   if(localNetGate.statusEl) localNetGate.statusEl.textContent = "Requesting permission…";
 
-  await probeAll(2500);
-  await new Promise(r => setTimeout(r, 300));
-
+  const r = await probeAndRefresh(2500);
   localNetGate.probing = false;
   if(localNetGate.retryEl) localNetGate.retryEl.disabled = false;
 
-  localNetGate.permissionState = await queryPermission();
-  applyMode(recomputeMode());
-
+  /* 1. Permission granted → full success. */
   if(localNetGate.permissionState === "granted"){
+    applyMode("granted");
     notify("Local network access granted ✓");
+    return;
   }
-}
-
-async function triggerTest(){
-  if(localNetGate.testEl) localNetGate.testEl.disabled = true;
-  if(localNetGate.statusEl) localNetGate.statusEl.textContent = "Testing…";
-
-  const r = await probeAll(1800);
-  if(localNetGate.testEl) localNetGate.testEl.disabled = false;
-
+  /* 2. Permission now exposed and still pending → re-render gate. */
+  if(localNetGate.permissionState === "prompt"){
+    applyMode("chrome-prompt");
+    return;
+  }
+  /* 3. Query still "unsupported" but probes worked → the browser
+        clearly let us through. Unlock via acknowledgment. */
   if(r.ok > 0){
-    if(localNetGate.statusEl){
-      localNetGate.statusEl.textContent =
-        `✓ ${r.ok}/${r.total} probes succeeded — LAN access works.`;
-    }
     acknowledge(true);
-  } else {
-    if(localNetGate.statusEl){
-      localNetGate.statusEl.textContent =
-        `✗ 0/${r.total} probes succeeded. Either access is still blocked, ` +
-        `no device responded on that port, or you're on a different Wi-Fi.`;
-    }
+    notify("Local network access enabled ✓");
+    return;
+  }
+  /* 4. Nothing worked — re-apply mode to show updated instructions. */
+  applyMode(recomputeMode());
+  if(localNetGate.statusEl){
+    localNetGate.statusEl.textContent =
+      "Still not accessible — follow the instructions above.";
   }
 }
 
+/* Called by the banner's "Enable / Test" button. This is the path
+   that makes Brave work: clicking fires a probe, which triggers
+   Brave's native LNA prompt (if that Brave supports it), then we
+   re-query the permission and unlock. */
 async function testFromBanner(){
   if(localNetGate.bsbTestEl) localNetGate.bsbTestEl.disabled = true;
-  const r = await probeAll(1500);
-  if(localNetGate.bsbTestEl) localNetGate.bsbTestEl.disabled = false;
+  const prevLabel = localNetGate.bsbTestEl
+    ? localNetGate.bsbTestEl.textContent : "";
+  if(localNetGate.bsbTestEl) localNetGate.bsbTestEl.textContent = "Checking…";
 
-  if(r.ok > 0){
-    notify(`✓ ${r.ok}/${r.total} probes succeeded — LAN access works`);
-    acknowledge(true);
-  } else {
-    notify(`✗ 0/${r.total} probes succeeded — LAN blocked or no device responded`, "error");
+  const r = await probeAndRefresh(2000);
+
+  if(localNetGate.bsbTestEl){
+    localNetGate.bsbTestEl.disabled = false;
+    localNetGate.bsbTestEl.textContent = prevLabel || "Enable / Test";
   }
+
+  if(localNetGate.permissionState === "granted"){
+    acknowledge(true);
+    notify("Local network access granted ✓");
+    return;
+  }
+  if(localNetGate.permissionState === "prompt"){
+    applyMode("chrome-prompt");
+    notify("Permission requested — allow it in the browser prompt", "error");
+    return;
+  }
+  if(r.ok > 0){
+    acknowledge(true);
+    notify(`✓ ${r.ok}/${r.total} probes succeeded — LAN access works`);
+    return;
+  }
+
+  /* Update the banner message with the failure reason */
+  const g = localNetGate;
+  if(g.bsbMsgEl){
+    const original = g.bsbMsgEl.innerHTML;
+    if(!original.startsWith("✗")){
+      g.bsbMsgEl.innerHTML =
+        "✗ Still not accessible. " +
+        (g.isBrave
+          ? "Turn <strong>Shields down</strong> for this site (🦁 lion icon) " +
+            "and click <strong>Enable / Test</strong> again. If your Brave " +
+            "supports LNA, a native prompt should appear."
+          : "Check your browser's privacy settings for this site.");
+    }
+  }
+  notify(`✗ 0/${r.total} probes succeeded — still blocked`, "error");
 }
 
 function acknowledge(silent){
@@ -542,12 +625,10 @@ function wireBadge(){
       notify("Local network access is OK ✓");
       return;
     }
-    /* If we're in a hard-block mode, re-run applyMode to reopen the gate */
     if(localNetBlocked()){
       applyMode(recomputeMode());
       return;
     }
-    /* Otherwise reopen the warning banner */
     if(localNetGate.bannerEl &&
        localNetGate.bannerEl.classList.contains("hidden")){
       renderSupportBanner();
@@ -561,15 +642,20 @@ function wireBadge(){
   detectEnvironment();
   localNetGate.isBrave = await detectBrave();
   try{ localNetGate.acknowledged = localStorage.getItem(LN_ACK_KEY) === "1"; }catch(_){}
+
+  /* Initial query with retry — some Chromium forks throw once
+     while their permission manager warms up. */
   localNetGate.permissionState = await queryPermission();
 
-  /* wire gate buttons */
+  /* Wire gate buttons */
   if(localNetGate.retryEl)
     localNetGate.retryEl.addEventListener("click", triggerAllow);
+  /* Gate's "Test connectivity" button behaves like Allow — it fires
+     probes which trigger the browser's native prompt. */
   if(localNetGate.testEl)
-    localNetGate.testEl.addEventListener("click", triggerTest);
+    localNetGate.testEl.addEventListener("click", triggerAllow);
 
-  /* wire banner buttons */
+  /* Wire banner buttons */
   if(localNetGate.bsbTestEl)
     localNetGate.bsbTestEl.addEventListener("click", testFromBanner);
   if(localNetGate.bsbDismissEl)
@@ -578,4 +664,16 @@ function wireBadge(){
   wireBadge();
 
   applyMode(recomputeMode());
+
+  /* Late re-check: some Chromium forks (Brave) report
+     "unsupported" on first call but start answering after the
+     permission manager has fully initialized. */
+  if(localNetGate.permissionState === "unsupported"){
+    setTimeout(async () => {
+      const { before, now } = await refreshPermission();
+      if(now !== before && now !== "unsupported"){
+        applyMode(recomputeMode());
+      }
+    }, 800);
+  }
 })();
