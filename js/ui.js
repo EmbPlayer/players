@@ -55,9 +55,6 @@ btnModalSave.addEventListener("click", () => {
   updateMainTarget();   // defined in url.js
 });
 
-/* ---------- https warning ---------- */
-if(location.protocol === "https:") httpsWarn.classList.remove("hidden");
-
 /* ============================================================
    FULLSCREEN VIEWER
    ============================================================ */
