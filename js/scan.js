@@ -31,6 +31,13 @@ async function probe(ip, port, timeout){
 btnRunScan.addEventListener("click", async () => {
   if(state.running) return;
 
+  /* --- local network access gate (must be granted to scan) --- */
+  if(typeof localNetBlocked === "function" && localNetBlocked()){
+    showLocalNetGate();
+    notify("Allow local network access before scanning.", "error");
+    return;
+  }
+
   if(topDeviceUrl.value.trim()){
     handleUrlInput(topDeviceUrl.value);
   }
