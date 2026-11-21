@@ -7,6 +7,11 @@
 
 const $ = (id) => document.getElementById(id);
 
+/* ---------- hidden device path ----------
+   Appended internally when opening a device in the viewer.
+   NEVER shown to the user in the UI, input, saved list, or tables. */
+const DEVICE_PATH = "/main";
+
 /* ---------- DOM: header / top bar ---------- */
 const topDeviceUrl = $("topDeviceUrl");
 const btnOpenConfig = $("btnOpenConfig");
