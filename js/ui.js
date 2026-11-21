@@ -70,7 +70,8 @@ function openViewer(ip, port){
     return;
   }
 
-  const url = `http://${ip}:${port}/`;
+  /* Hidden DEVICE_PATH is appended here — the user never sees it. */
+  const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
   viewerFrame.src = url;
   viewer.classList.remove("hidden");
