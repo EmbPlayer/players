@@ -47,15 +47,19 @@ function closeConfigModal(){
 }
 
 /* ⚙️ Settings is one of the two explicit permission entry points.
-   Every click while not granted requests permission (fires LAN
-   probes → Chrome's native LNA prompt). The modal always opens,
-   so the user is never blocked from configuring scan options. */
+   Every click while not granted fires a LAN probe (which is what
+   triggers Chrome's native LNA prompt when state is "prompt").
+   The gate — if it happened to be open from a prior badge click —
+   is hidden so the modal is not trapped underneath it.
+   The modal ALWAYS opens, so the user is never blocked from
+   configuring scan options. */
 btnOpenConfig.addEventListener("click", async () => {
   if(typeof localNetGate !== "undefined" &&
      typeof triggerAllow === "function" &&
      localNetGate.permissionState !== "granted" &&
      !localNetGate.scanVerified){
     const r = await triggerAllow();
+    if(typeof hideLocalNetGate === "function") hideLocalNetGate();
     if(r && effectiveStatus() !== "granted"){
       notify("Permission not granted — scanning is disabled until allowed", "error");
     }
@@ -77,15 +81,13 @@ btnModalSave.addEventListener("click", () => {
 
 const viewerLabelBtn = document.getElementById("viewerLabel");
 
-/* openViewer does NOT show the gate and does NOT request permission.
-   If access isn't granted, a small toast warns the user (so they
-   know why the iframe may appear blank) — but the viewer still
-   opens, and the page remains fully usable. */
+/* ---------- open viewer ----------
+   Opens the device directly. NO permission check, NO gate, NO
+   toast — a link loaded via ?load= / ?device=, a click on a
+   scan result, and a click on a saved device all use this path.
+   If the browser happens to allow the iframe (which is common
+   from http://localhost even without LNA), it just works.       */
 function openViewer(ip, port){
-  if(typeof localNetBlocked === "function" && localNetBlocked()){
-    notify("Click 🌐 to grant LAN access if the viewer is blank", "error");
-  }
-
   const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
   viewerFrame.src = url;
