@@ -46,21 +46,23 @@ function closeConfigModal(){
   configModal.classList.add("hidden");
 }
 
+/* ⚙️ Settings is one of the TWO explicit permission entry points
+   (the other is the 🌐 badge). Every click while not granted
+   requests permission (fires LAN probes → Chrome's native LNA
+   prompt). The modal is opened regardless so the user can still
+   configure scan options — it never blocks the site. */
 btnOpenConfig.addEventListener("click", async () => {
-  /* Only the Settings button (and the LAN badge) request permission. */
   if(typeof localNetGate !== "undefined" &&
      typeof triggerAllow === "function" &&
      localNetGate.permissionState !== "granted" &&
      !localNetGate.scanVerified){
-    await triggerAllow();
-    if(typeof localNetBlocked === "function" && localNetBlocked()){
-      /* Gate is showing — user must resolve permission before settings. */
-      return;
+    const r = await triggerAllow();
+    if(r && effectiveStatus() !== "granted"){
+      notify("Permission not granted — scanning is disabled until allowed", "error");
     }
   }
   openConfigModal();
 });
-
 
 btnModalClose.addEventListener("click", closeConfigModal);
 btnModalCancel.addEventListener("click", closeConfigModal);
@@ -74,10 +76,11 @@ btnModalSave.addEventListener("click", () => {
    FULLSCREEN VIEWER
    ============================================================ */
 
-/* Grab the label button once — it never leaves the DOM. */
 const viewerLabelBtn = document.getElementById("viewerLabel");
 
-/* ---------- open viewer ---------- */
+/* openViewer does NOT request permission. If access isn't granted
+   it simply shows the gate — the user resolves it via the 🌐 badge
+   or ⚙️ Settings. */
 function openViewer(ip, port){
   if(typeof localNetBlocked === "function" && localNetBlocked()){
     showLocalNetGate();
@@ -85,7 +88,6 @@ function openViewer(ip, port){
     return;
   }
 
-  /* Hidden DEVICE_PATH is appended here — the user never sees it. */
   const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
   viewerFrame.src = url;
@@ -95,7 +97,6 @@ function openViewer(ip, port){
   saveViewerState(ip, port);
 }
 
-/* ---------- resolve label for the current ip/port ---------- */
 function resolveViewerLabel(ip, port){
   if(!ip) return "";
 
@@ -113,14 +114,12 @@ function resolveViewerLabel(ip, port){
   return "";
 }
 
-/* ---------- refresh the label button for a new device ---------- */
 function updateViewerLabel(ip, port){
   if(!viewerLabelBtn) return;
 
   const label = resolveViewerLabel(ip, port);
   state.currentViewerLabel = label;
 
-  /* Always start in the collapsed "📌" state */
   viewerLabelBtn.classList.remove("active");
   viewerLabelBtn.setAttribute("aria-pressed", "false");
   viewerLabelBtn.textContent = "📌";
@@ -137,7 +136,6 @@ function updateViewerLabel(ip, port){
   viewerLabelBtn.setAttribute("aria-label", "Show label");
 }
 
-/* ---------- 📌 click → toggle between label text and icon ---------- */
 function toggleViewerLabel(){
   if(!viewerLabelBtn || !state.currentViewerLabel) return;
 
@@ -159,7 +157,6 @@ if(viewerLabelBtn){
   viewerLabelBtn.addEventListener("click", toggleViewerLabel);
 }
 
-/* ---------- close viewer ---------- */
 function closeViewer(){
   viewer.classList.add("hidden");
   viewerFrame.src = "about:blank";
@@ -172,11 +169,16 @@ function closeViewer(){
 
 viewerClose.addEventListener("click", closeViewer);
 
+/* Escape: dismiss gate first (so the user can skip and keep using
+   the site), then viewer, then config modal. */
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
   const gate = document.getElementById("localNetGate");
-  if(gate && !gate.classList.contains("hidden")) return;
+  if(gate && !gate.classList.contains("hidden")){
+    hideLocalNetGate();
+    return;
+  }
 
   if(!viewer.classList.contains("hidden")) closeViewer();
   if(!configModal.classList.contains("hidden")) closeConfigModal();
