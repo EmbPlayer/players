@@ -13,9 +13,19 @@
                    Stays yellow until a real scan succeeds —
                    probe-test success does NOT count as proof.
 
+   Permission is only REQUESTED from:
+     • the 🌐 badge        (every click, if not granted)
+     • the ⚙️ Settings btn (every click, if not granted)
+
+   The gate overlay is NEVER shown on page load. It is shown
+   only when the user actively tries to scan / open a device,
+   or after a failed 🌐 click. Escape dismisses it so the user
+   can continue using the site without scanning.
+
    Public API used by scan.js / ui.js:
      • localNetBlocked()
      • showLocalNetGate()
+     • triggerAllow()
      • reportScanSuccess(count)
      • reportScanFailure()
    ============================================================ */
@@ -38,7 +48,7 @@ const localNetGate = {
   status: "unknown",
 
   acknowledged: false,
-  scanVerified: false,   // ← true ONLY after a scan found devices (this session)
+  scanVerified: false,
   probing: false,
 
   gateEl: null, titleEl: null, msgEl: null, helpEl: null, stepsEl: null,
@@ -223,21 +233,16 @@ function recomputeMode(){
   return "unknown";
 }
 
-/* Badge state — the ONLY place that decides green vs yellow. */
 function effectiveStatus(){
   const g = localNetGate;
 
-  /* Green ONLY for real proof: explicit permission OR a scan
-     that actually found devices in this session. */
   if(g.permissionState === "granted") return "granted";
   if(g.scanVerified)                  return "granted";
 
-  /* Hard blockers */
   const m = g.mode;
   if(m === "chrome-prompt" || m === "chrome-denied" ||
      m === "https-blocked" || m === "file-origin") return m;
 
-  /* Every soft mode stays yellow. */
   return "warn";
 }
 
@@ -328,7 +333,6 @@ function getSupportInfo(){
   const g = localNetGate;
   const v = g.version;
 
-  /* Real success (permission granted OR scan verified) */
   if(g.permissionState === "granted" || g.scanVerified){
     return { level: "ok" };
   }
@@ -356,20 +360,22 @@ function getSupportInfo(){
     return { level: "warn",
       title: `Chrome ${v.chrome} may have problems`,
       msg: `Local Network Access is fully supported from ` +
-           `<strong>Google Chrome ${MIN_CHROME_VERSION}+</strong>.` };
+           `<strong>Google Chrome ${MIN_CHROME_VERSION}+</strong>. ` +
+           `Click the 🌐 badge to try anyway.` };
   }
   if(g.isEdge && v.edge > 0 && v.edge < MIN_EDGE_VERSION){
     return { level: "warn",
       title: `Edge ${v.edge} may have problems`,
       msg: `Local Network Access is fully supported from ` +
-           `<strong>Edge ${MIN_EDGE_VERSION}+</strong>.` };
+           `<strong>Edge ${MIN_EDGE_VERSION}+</strong>. ` +
+           `Click the 🌐 badge to try anyway.` };
   }
   if(g.isBrave){
     return { level: "warn",
       title: "Brave — LAN access not verified",
       msg: "Brave blocks LAN requests through Shields and does not expose " +
-           "the LNA permission to JavaScript. Click <strong>Test connection</strong> " +
-           "below — if your Brave supports LNA, the browser's own " +
+           "the LNA permission to JavaScript. Click the <strong>🌐 badge</strong> " +
+           "to try — if your Brave supports LNA, the browser's own " +
            "<em>access local network</em> prompt will appear. If it still fails, " +
            "turn off Shields for this site (🦁 lion icon). " +
            "The badge only turns green once a scan actually finds a device." };
@@ -378,17 +384,16 @@ function getSupportInfo(){
     return { level: "warn",
       title: "Samsung Internet — LAN access not verified",
       msg: "Samsung Internet does not expose the LNA permission, so the app " +
-           "cannot confirm access. Click <strong>Test connection</strong> for " +
-           "a diagnostic, then <strong>Run Scan</strong> — the badge turns " +
-           "green only if a scan finds a device. If the scan finds nothing, " +
-           "verify your phone is on <strong>Wi-Fi</strong> (not mobile data) " +
-           "and the target is powered on." };
+           "cannot confirm access. Click the <strong>🌐 badge</strong>, then " +
+           "<strong>Run Scan</strong> — the badge turns green only if a scan " +
+           "finds a device. If the scan finds nothing, verify your phone is on " +
+           "<strong>Wi-Fi</strong> (not mobile data) and the target is powered on." };
   }
   if(g.isFirefox){
     return { level: "warn",
       title: "Firefox — LAN access not verified",
-      msg: "Firefox does not support the LNA permission. Click " +
-           "<strong>Test connection</strong>, then <strong>Run Scan</strong>. " +
+      msg: "Firefox does not support the LNA permission. Click the " +
+           "<strong>🌐 badge</strong>, then <strong>Run Scan</strong>. " +
            "If blocked, disable <em>Enhanced Tracking Protection</em> for this " +
            "site (🛡️ shield icon)." };
   }
@@ -396,19 +401,19 @@ function getSupportInfo(){
     return { level: "warn",
       title: "Safari — LAN access not verified",
       msg: "Safari does not support the LNA permission. On iOS, verify " +
-           "Settings → Privacy → Local Network allows Safari. Click " +
-           "<strong>Test connection</strong>, then <strong>Run Scan</strong>." };
+           "Settings → Privacy → Local Network allows Safari. Click the " +
+           "<strong>🌐 badge</strong>, then <strong>Run Scan</strong>." };
   }
   if(g.isChromiumFamily){
     return { level: "warn",
       title: "Browser — LAN access not verified",
       msg: "This Chromium browser does not expose the LNA permission. " +
-           "Click <strong>Test connection</strong>, then <strong>Run Scan</strong> " +
+           "Click the <strong>🌐 badge</strong>, then <strong>Run Scan</strong> " +
            "— the badge turns green only when a scan finds a device." };
   }
   return { level: "warn",
     title: "Browser — LAN access not verified",
-    msg: "Click <strong>Test connection</strong>, then <strong>Run Scan</strong> " +
+    msg: "Click the <strong>🌐 badge</strong>, then <strong>Run Scan</strong> " +
          "— the badge turns green only when a scan finds a device." };
 }
 
@@ -420,8 +425,6 @@ function renderSupportBanner(){
   const info = getSupportInfo();
 
   if(info.level === "ok"){ hideBanner(); return; }
-  /* acknowledged (via Continue anyway) only hides the banner — the
-     badge stays yellow so the app never falsely claims success. */
   if(info.level === "warn" && g.acknowledged){ hideBanner(); return; }
   if(info.level === "warn"){
     try{ if(localStorage.getItem(BSB_KEY) === "1"){ hideBanner(); return; } }catch(_){}
@@ -438,13 +441,16 @@ function renderSupportBanner(){
   if(g.bsbDismissEl){
     g.bsbDismissEl.style.display = info.level === "error" ? "none" : "";
   }
+  /* Test-connection button is permanently hidden — permission is
+     only requested from the 🌐 badge and the ⚙️ Settings button. */
   if(g.bsbTestEl){
-    g.bsbTestEl.style.display = info.level === "error" ? "none" : "";
-    g.bsbTestEl.textContent = "Test connection";
+    g.bsbTestEl.style.display = "none";
   }
 }
 
-/* ---------- apply mode ---------- */
+/* ---------- apply mode ----------
+   IMPORTANT: this NEVER shows the gate. The gate is only shown by
+   the explicit callers (scan click, viewer open, badge click).   */
 function applyMode(mode){
   const g = localNetGate;
   g.mode = mode;
@@ -461,13 +467,11 @@ function applyMode(mode){
      mode === "https-blocked" || mode === "file-origin"){
     g.status = mode;
     setBadge(mode);
-    showLocalNetGate();
-    renderGateContent(mode);
+    renderGateContent(mode);   // keep gate content ready, but hidden
     renderSupportBanner();
     return;
   }
 
-  /* Soft mode: badge is warn unless scan-verified (see effectiveStatus). */
   g.status = effectiveStatus();
   setBadge(g.status);
   hideLocalNetGate();
@@ -516,8 +520,6 @@ async function probeAll(timeoutMs){
         mode: "no-cors", cache: "no-store",
         credentials: "omit", referrerPolicy: "no-referrer"
       }, timeoutMs);
-      /* NOTE: on Samsung, opaque resolves even for a failed connection,
-         so "ok" here means "no exception thrown", not "server exists". */
       const okNow = res && (res.type === "opaque" || res.ok);
       results.push({ ...p, ok: !!okNow, ms: +(performance.now() - t0).toFixed(0) });
       if(okNow) ok++;
@@ -532,7 +534,6 @@ async function probeAll(timeoutMs){
   return { ok, total: probes.length, results };
 }
 
-/* ---------- actions ---------- */
 async function probeAndRefresh(timeoutMs){
   const r = await probeAll(timeoutMs);
   await new Promise(res => setTimeout(res, 400));
@@ -540,8 +541,16 @@ async function probeAndRefresh(timeoutMs){
   return r;
 }
 
+/* ---------- trigger permission ----------
+   Called ONLY by: the 🌐 badge, the ⚙️ Settings button, and the
+   gate's own Allow / Test buttons (which are already part of the
+   permission-resolution flow once the gate is visible).
+
+   It fires LAN probes — which is what makes Chrome 141+ show the
+   native LNA prompt. It does NOT show the gate. Returns the probe
+   summary so the caller can decide what to show the user.        */
 async function triggerAllow(){
-  if(localNetGate.probing) return;
+  if(localNetGate.probing) return null;
   localNetGate.probing = true;
   if(localNetGate.retryEl)  localNetGate.retryEl.disabled = true;
   if(localNetGate.statusEl) localNetGate.statusEl.textContent = "Requesting permission…";
@@ -552,104 +561,28 @@ async function triggerAllow(){
 
   if(localNetGate.permissionState === "granted"){
     applyMode("granted");
-    notify("Local network access granted ✓");
-    return;
+  } else {
+    applyMode(recomputeMode());
   }
-  if(localNetGate.permissionState === "prompt"){
-    applyMode("chrome-prompt");
-    return;
-  }
-  applyMode(recomputeMode());
 
-  /* Hard modes (denied / https / file / still-prompt) → gate visible;
-     update its inline status message as before. */
+  /* Update the gate's inline status if the gate happens to be visible
+     (e.g. user clicked the gate's own "Allow access" button). */
   const gateVisible = localNetGate.gateEl &&
                       !localNetGate.gateEl.classList.contains("hidden");
-  if(gateVisible){
-    if(localNetGate.statusEl){
-      localNetGate.statusEl.textContent = r.ok > 0
-        ? `${r.ok}/${r.total} probes responded. If access is still blocked, ` +
-          `check the browser's site settings.`
-        : "No addresses responded — still blocked.";
-    }
-    return;
+  if(gateVisible && localNetGate.statusEl){
+    localNetGate.statusEl.textContent = r.ok > 0
+      ? `${r.ok}/${r.total} probes responded — if still blocked, check site settings.`
+      : "No addresses responded — access still blocked.";
   }
 
-  /* Soft mode (Brave / Firefox / Safari / Samsung / generic Chromium).
-     Gate stays hidden, so surface a toast so the click is not silent. */
-  notify(
-    r.ok > 0
-      ? `${r.ok}/${r.total} probes responded — check browser settings if still blocked`
-      : "No probes responded — check browser's local-network settings",
-    "error"
-  );
-}
-
-async function testFromBanner(){
-  const g = localNetGate;
-  if(g.bsbTestEl) g.bsbTestEl.disabled = true;
-  const prev = g.bsbTestEl ? g.bsbTestEl.textContent : "";
-  if(g.bsbTestEl) g.bsbTestEl.textContent = "Checking…";
-
-  const r  = await probeAndRefresh(2000);
-  const cfg = configuredSubnetPort();
-
-  if(g.bsbTestEl){
-    g.bsbTestEl.disabled = false;
-    g.bsbTestEl.textContent = prev || "Test connection";
-  }
-
-  /* Permission granted → that IS proof. */
-  if(g.permissionState === "granted"){
-    applyMode("granted");
-    notify("Local network access granted ✓");
-    return;
-  }
-
-  /* Even if probes "responded", we do NOT claim verified — because
-     on Samsung, opaque may mean the browser blocked the request.
-     Only a real scan can prove access. */
-  if(r.ok > 0){
-    const targetDesc = cfg
-      ? `${cfg.subnet}.0/24 port <strong>${cfg.port}</strong>`
-      : "your LAN";
-    if(g.bsbMsgEl){
-      g.bsbMsgEl.innerHTML =
-        `⚠️ <strong>${r.ok}/${r.total} probes responded</strong> on ${targetDesc}. ` +
-        `That does <strong>not</strong> guarantee LAN access — some browsers ` +
-        `return "success" even when they block the request. ` +
-        `<strong>Run a scan</strong> to confirm — the badge will turn green ` +
-        `only if a device is found.`;
-    }
-    notify(`${r.ok}/${r.total} probes responded — run a scan to confirm`);
-    return;
-  }
-
-  /* Failure: no probes responded. Update the banner honestly. */
-  if(g.bsbMsgEl){
-    const targetDesc = cfg
-      ? `${cfg.subnet}.0/24 port <strong>${cfg.port}</strong>`
-      : "any LAN address (no target configured)";
-    g.bsbMsgEl.innerHTML =
-      `✗ <strong>Test failed.</strong> No response from ${targetDesc}. ` +
-      (g.isSamsung
-        ? "Check that your phone is on <strong>Wi-Fi</strong> (not mobile data), " +
-          "the target is powered on, and the port is correct. "
-        : g.isBrave
-        ? "Turn <strong>Shields down</strong> for this site (🦁 lion icon). "
-        : "") +
-      "Tap <strong>Test connection</strong> to retry, or <strong>Run Scan</strong>.";
-  }
-  notify(`✗ 0/${r.total} probes responded`, "error");
+  return r;
 }
 
 /* ---------- scan result callbacks (called from scan.js) ---------- */
-
-/* A scan actually found ≥ 1 device → that IS real proof of LAN access. */
 function reportScanSuccess(count){
   const g = localNetGate;
   if(!count || count <= 0) return;
-  if(g.permissionState === "granted") return; // already green
+  if(g.permissionState === "granted") return;
 
   const wasVerified = g.scanVerified;
   g.scanVerified = true;
@@ -663,15 +596,11 @@ function reportScanSuccess(count){
   }
 }
 
-/* A scan found 0 devices → reset any false "verified" state. */
 function reportScanFailure(){
   const g = localNetGate;
 
-  /* Chrome with granted permission stays green — no LAN issue there,
-     the target just didn't respond (wrong subnet / device off). */
   if(g.permissionState === "granted") return;
 
-  /* Hard blockers already handled by the gate. */
   const softModes = ["brave","samsung","firefox","safari",
                      "generic-chromium","unknown"];
   if(!softModes.includes(g.mode)) return;
@@ -698,7 +627,7 @@ function reportScanFailure(){
         : g.isBrave
         ? "Turn off <strong>Shields</strong> for this site (🦁 lion icon). "
         : "") +
-      "Tap <strong>Test connection</strong> to diagnose.";
+      "Click the <strong>🌐 badge</strong> to try again.";
   }
 }
 
@@ -706,7 +635,6 @@ function acknowledge(silent){
   try{ localStorage.setItem(LN_ACK_KEY, "1"); }catch{}
   localNetGate.acknowledged = true;
 
-  /* Acknowledge NEVER claims success — badge stays as-is. */
   localNetGate.status = effectiveStatus();
   setBadge(localNetGate.status);
   hideLocalNetGate();
@@ -720,20 +648,50 @@ function dismissBanner(){
   hideBanner();
 }
 
-/* ---------- badge ---------- */
+/* ---------- badge click → request permission ----------
+   This is the primary "ask for permission" entry point. Every
+   click while not granted fires the probes (Chrome 141+ shows
+   the browser prompt). If access is still not granted after the
+   attempt, the gate is shown so the user knows what to fix.      */
 function wireBadge(){
   const b = localNetGate.badgeEl;
   if(!b) return;
   b.addEventListener("click", async () => {
     try{ localStorage.removeItem(BSB_KEY); }catch{}
-    const st = effectiveStatus();
-    if(st === "granted"){
+
+    if(effectiveStatus() === "granted"){
       notify("LAN access verified ✓");
       return;
     }
-    /* Only the badge (and the Settings button) request permission. */
-    await triggerAllow();
+
+    const r = await triggerAllow();
+    if(!r) return;  // probing already in progress
+
+    if(effectiveStatus() === "granted"){
+      notify("Local network access granted ✓");
+      return;
+    }
+
+    if(localNetBlocked()){
+      /* Hard mode still blocking → show the gate with instructions. */
+      showLocalNetGate();
+    } else if(r.ok > 0){
+      notify(`${r.ok}/${r.total} probes responded — run a scan to confirm`);
+    } else {
+      notify("No probes responded — check browser settings", "error");
+    }
   });
+}
+
+/* ---------- gate's own buttons ---------- */
+async function gateActionAttempt(){
+  const r = await triggerAllow();
+  if(!r) return;
+  if(effectiveStatus() === "granted"){
+    notify("Local network access granted ✓");
+  }
+  /* If still blocked, gate stays visible — triggerAllow already
+     refreshed the inline status message.                          */
 }
 
 /* ---------- init ---------- */
@@ -745,18 +703,17 @@ function wireBadge(){
   localNetGate.permissionState = await queryPermission();
 
   if(localNetGate.retryEl)
-    localNetGate.retryEl.addEventListener("click", triggerAllow);
+    localNetGate.retryEl.addEventListener("click", gateActionAttempt);
   if(localNetGate.testEl)
-    localNetGate.testEl.addEventListener("click", triggerAllow);
-  if(localNetGate.bsbTestEl)
-    localNetGate.bsbTestEl.addEventListener("click", testFromBanner);
+    localNetGate.testEl.addEventListener("click", gateActionAttempt);
   if(localNetGate.bsbDismissEl)
     localNetGate.bsbDismissEl.addEventListener("click", dismissBanner);
 
   wireBadge();
+
+  /* Populate mode/badge/banner but DO NOT show the gate on load. */
   applyMode(recomputeMode());
 
-  /* Late re-check for slow-to-init Chromium forks. */
   if(localNetGate.permissionState === "unsupported"){
     setTimeout(async () => {
       const { before, now } = await refreshPermission();
