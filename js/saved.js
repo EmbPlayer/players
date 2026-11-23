@@ -9,6 +9,27 @@ function isLinkSaved(ip, port){
   return state.savedLinks.some(item => item.url === url);
 }
 
+/* Save a device only if it is not already in the list.
+   If it is already saved but has no label, fill the label in.
+   Returns true only when a NEW entry was added. */
+function ensureLinkSaved(ip, port, label){
+  const url = `http://${ip}:${port}/`;
+  const existing = state.savedLinks.find(item => item.url === url);
+
+  if(existing){
+    if(!existing.label && label){
+      existing.label = label;
+      saveSavedLinks();
+    }
+    return false;
+  }
+
+  const knownLabel = (state.labels[ip] && state.labels[ip].label) || "";
+  state.savedLinks.push({ url, ip, port, label: label || knownLabel });
+  saveSavedLinks();
+  return true;
+}
+
 function toggleSaveLink(ip, port){
   const url = `http://${ip}:${port}/`;
   const existingLabel = (state.labels[ip] && state.labels[ip].label)

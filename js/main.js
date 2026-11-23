@@ -52,6 +52,14 @@
 
     if(state.parsed && !state.parsed.error){
       const { ip, port } = state.parsed;
+
+      /* Auto-save the device from ?device= / ?load= (only if missing).
+         Optional: ?label=Kitchen */
+      const customLabel = (params.get("label") || "").trim();
+      if(ensureLinkSaved(ip, port, customLabel)){
+        notify("Saved to your devices ⭐");
+      }
+
       state.lastOpenList = [{ ip, isDirect: true }];
       renderList(state.lastOpenList, port, false);
       if(shouldOpenViewer){
