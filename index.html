@@ -160,7 +160,7 @@
       Without this, scanning cannot work.
     </p>
     <div id="lnDeniedHelp" class="ln-help hidden"></div>
-    <ol class="ln-steps">
+    <ol class="ln-steps" id="lnSteps">
       <li>Click <strong>Allow access</strong> below.</li>
       <li>When your browser asks, choose <strong>Allow</strong>.</li>
       <li>The app unlocks automatically once granted.</li>
@@ -168,7 +168,12 @@
     <div class="ln-actions">
       <button id="lnRetry" class="primary">Allow access</button>
       <button id="lnTest" class="hidden">Test connectivity</button>
+      <button id="lnDismiss" type="button">Not now</button>
     </div>
+    <p class="ln-msg" style="font-size:13px;opacity:.75;margin-top:12px;">
+      Not now? You can still open saved devices — they will open by direct
+      redirect instead of the embedded viewer.
+    </p>
     <div class="ln-status" id="lnStatus"></div>
   </div>
 </div>
