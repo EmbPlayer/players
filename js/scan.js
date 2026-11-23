@@ -5,7 +5,6 @@
    stop button, watch mode.
    ============================================================ */
 
-/* ---------- single probe ---------- */
 async function probe(ip, port, timeout){
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
@@ -27,16 +26,12 @@ async function probe(ip, port, timeout){
   }
 }
 
-/* ---------- run scan ----------
-   Run Scan never shows the gate and never requests permission.
-   If not granted, a toast tells the user where to click — the
-   page stays fully usable.                                     */
 btnRunScan.addEventListener("click", async () => {
   if(state.running) return;
 
   if(typeof localNetBlocked === "function" && localNetBlocked()){
-    if(typeof localNetGate !== "undefined" && localNetGate.mode === "public-origin"){
-      notify("Serve from http://localhost to scan", "error");
+    if(localNetGate.mode === "public-origin"){
+      notify("Serve from http://localhost to enable LAN access", "error");
     } else {
       notify("Permission needed — click 🌐 to grant access", "error");
     }
@@ -171,10 +166,8 @@ btnRunScan.addEventListener("click", async () => {
   }
 });
 
-/* ---------- stop ---------- */
 stopBtn.addEventListener("click", () => { state.stopRequested = true; });
 
-/* ---------- watch mode ---------- */
 function scheduleWatch(){
   if(state.watchTimer){ clearInterval(state.watchTimer); state.watchTimer = null; }
   if(!watchToggle.checked) return;
