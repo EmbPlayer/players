@@ -27,14 +27,15 @@ async function probe(ip, port, timeout){
   }
 }
 
-/* ---------- run scan ---------- */
+/* ---------- run scan ----------
+   Run Scan never shows the gate and never requests permission.
+   If LAN access is not granted, a toast tells the user to click
+   🌐 — the page stays fully usable.                              */
 btnRunScan.addEventListener("click", async () => {
   if(state.running) return;
 
-  /* --- local network access gate (must be granted to scan) --- */
   if(typeof localNetBlocked === "function" && localNetBlocked()){
-    showLocalNetGate();
-    notify("Allow local network access before scanning.", "error");
+    notify("Permission needed — click 🌐 to grant access", "error");
     return;
   }
 
@@ -68,9 +69,6 @@ btnRunScan.addEventListener("click", async () => {
   if(!(concurrency >= 1 && concurrency <= 200)){
     notify("Invalid concurrency (1–200).", "error"); return;
   }
-
-  // NOTE: The Scan Results dropdown is intentionally NOT auto-opened here.
-  // It is only ever toggled by the "▶ Scan Results" button.
 
   state.running = true;
   state.stopRequested = false;
@@ -145,9 +143,6 @@ btnRunScan.addEventListener("click", async () => {
     state.lastOpenList = openDevices;
     renderList(openDevices, port, false);
 
-    /* Tell the LNA layer what happened. A successful scan is the ONLY
-       proof that LAN access works; a failed scan resets the badge so it
-       can never falsely claim success. */
     if(!state.stopRequested){
       if(openDevices.length > 0){
         if(typeof reportScanSuccess === "function"){
