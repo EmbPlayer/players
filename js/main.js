@@ -3,13 +3,16 @@
 /* ============================================================
    MAIN: app initialisation — restore last scan, saved devices,
    URL query params (?device=… / ?load=…), stored URL and
-   viewer session. Loaded last, after all helpers are defined.
+   viewer session.
 
-   Query params:
-     ?device=<url>  → parse, render, AND open the fullscreen viewer
-     ?load=<url>    → parse, render only (no viewer launch)
-
-   If both are present, ?device= wins.
+   Permission gating:
+     • Already granted        → old way, no gate, everything runs.
+     • Not granted (hard mode) → gate shows on load; the deep link
+       is stored as `pendingNav` and fires only once permission
+       is granted (window.__onLanGranted).
+     • User dismisses gate    → pendingNav is dropped.
+     • Soft browsers          → no permission to grant → old way,
+       no gate, deep link fires immediately.
    ============================================================ */
 
 (function(){
@@ -24,47 +27,78 @@
   const rv = localStorage.getItem(LSK.resultsVisible);
   setResultsVisible(rv === "1");
 
-  /* ---------- ?device=… / ?load=… deep link ---------- */
+  /* ---------- ?device= / ?load= deep link (deferred) ---------- */
   const params = new URLSearchParams(location.search);
   const deviceParam = params.get("device");
   const loadParam   = params.get("load");
+  const targetParam = deviceParam || loadParam;
 
-  /* ?device wins if both are present (stronger action). */
-  const targetParam      = deviceParam || loadParam;
-  const shouldOpenViewer = !!deviceParam;
+  let pendingNav = targetParam
+    ? { url: targetParam, openViewer: !!deviceParam }
+    : null;
 
-  if(targetParam){
-    try{
-      history.replaceState(null, "", location.pathname + location.hash);
-    }catch(_){}
-
-    topDeviceUrl.value = targetParam;
-    handleUrlInput(targetParam);
-
+  function processNav(nav){
+    try{ history.replaceState(null, "", location.pathname + location.hash); }catch(_){}
+    topDeviceUrl.value = nav.url;
+    handleUrlInput(nav.url);
     if(state.parsed && !state.parsed.error){
       const { ip, port } = state.parsed;
       state.lastOpenList = [{ ip, isDirect: true }];
       renderList(state.lastOpenList, port, false);
-      if(shouldOpenViewer){
+      if(nav.openViewer){
         openViewer(ip, port);
       }
     }
     renderSavedList();
-    return;
   }
 
-  /* ---------- restore stored device URL ---------- */
-  const storedUrl = loadStored();
-  if(storedUrl){
-    topDeviceUrl.value = storedUrl;
-    handleUrlInput(storedUrl);
-  }
+  /* Called by localnet.js applyMode("granted"). */
+  window.__onLanGranted = function(){
+    if(!pendingNav) return;
+    const nav = pendingNav;
+    pendingNav = null;
+    processNav(nav);
+  };
 
-  renderSavedList();
+  /* Called by localnet.js hideLocalNetGate(true) — user skip. */
+  window.__onLanGateDismissed = function(){
+    pendingNav = null;
+  };
 
-  /* ---------- restore viewer session ---------- */
-  const viewerState = loadViewerState();
-  if(viewerState){
-    openViewer(viewerState.ip, viewerState.port);
-  }
+  /* ---------- after permission check → decide what to show ---------- */
+  (async function(){
+    if(typeof localNetGateReady !== "undefined"){
+      try{ await localNetGateReady; }catch(_){}
+    }
+
+    /* 1. Deep link path. */
+    if(pendingNav){
+      const blocked = (typeof localNetBlocked === "function") && localNetBlocked();
+      if(blocked){
+        /* Gate is up — defer to __onLanGranted. */
+        return;
+      }
+      const nav = pendingNav;
+      pendingNav = null;
+      processNav(nav);
+      return;
+    }
+
+    /* 2. No deep link — restore stored URL + saved list (old way). */
+    const storedUrl = loadStored();
+    if(storedUrl){
+      topDeviceUrl.value = storedUrl;
+      handleUrlInput(storedUrl);
+    }
+
+    renderSavedList();
+
+    /* 3. Restore viewer session only when nothing is blocking. */
+    if(!(typeof localNetBlocked === "function" && localNetBlocked())){
+      const viewerState = loadViewerState();
+      if(viewerState){
+        openViewer(viewerState.ip, viewerState.port);
+      }
+    }
+  })();
 })();
