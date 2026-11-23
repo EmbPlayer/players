@@ -550,6 +550,28 @@ async function probeAll(timeoutMs){
   return { ok, total: probes.length, results };
 }
 
+/* ---------- automatic permission request (page load) ---------- */
+async function autoRequestPermission(){
+  const g = localNetGate;
+  if(g.permissionState !== "prompt") return;      // granted/denied/unsupported → nothing to ask
+  if(g.isHttps || g.isFileOrigin) return;         // probes can't work there
+  if(g.probing) return;
+
+  g.probing = true;
+  try{
+    /* A probe to a LAN address makes the browser show its native prompt. */
+    await probeAndRefresh(8000);
+  }catch(_){}
+  g.probing = false;
+
+  if(g.permissionState === "granted"){
+    applyMode("granted");
+    notify("Local network access granted ✓");
+  }else{
+    applyMode(recomputeMode());   // denied/prompt → badge + soft banner only
+  }
+}
+
 /* ---------- actions ---------- */
 async function probeAndRefresh(timeoutMs){
   const r = await probeAll(timeoutMs);
@@ -767,6 +789,12 @@ const localNetReady = (async function initLocalNetGate(){
 
   wireBadge();
   applyMode(recomputeMode());
+
+  /* Ask for permission automatically on page load — but quietly:
+     only the browser's own prompt appears, never our blocking gate.
+     If the user denies or ignores it, the app keeps working
+     (devices open by direct redirect). */
+  await autoRequestPermission();
 
   /* Late re-check for slow-to-init Chromium forks. */
   if(localNetGate.permissionState === "unsupported"){
