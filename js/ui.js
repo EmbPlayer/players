@@ -46,14 +46,15 @@ function closeConfigModal(){
   configModal.classList.add("hidden");
 }
 
-/* ⚙️ Settings — one of the two explicit permission entry points. */
 btnOpenConfig.addEventListener("click", async () => {
   if(typeof localNetGate !== "undefined" &&
      typeof triggerAllow === "function" &&
      localNetGate.permissionState !== "granted" &&
      !localNetGate.scanVerified){
 
-    if(localNetGate.mode === "public-origin"){
+    if(localNetGate.mode === "public-origin" ||
+       localNetGate.mode === "https-blocked" ||
+       localNetGate.mode === "file-origin"){
       notify("Serve from http://localhost to enable LAN access", "error");
       openConfigModal();
       return;
@@ -82,13 +83,30 @@ btnModalSave.addEventListener("click", () => {
 
 const viewerLabelBtn = document.getElementById("viewerLabel");
 
-/* openViewer just tries the iframe. No permission checks, no
-   gate, no placeholder — if the browser allows it, it shows the
-   device; if the browser blocks it (public origin, LNA denial,
-   mixed content), Chrome shows its own native error inside the
-   iframe. The user still sees the toolbar and can press Back.   */
+/* ---------- open viewer ----------
+   Permission granted  → embed in the iframe (old way).
+   No permission       → top-level redirect to the device.
+
+   Also redirects from any public HTTPS origin — mixed content
+   blocks the iframe there regardless of permission.              */
 function openViewer(ip, port){
   const url = `http://${ip}:${port}${DEVICE_PATH}`;
+
+  const granted =
+    typeof effectiveStatus === "function" && effectiveStatus() === "granted";
+
+  const publicHttps =
+    location.protocol === "https:" ||
+    (typeof localNetGate !== "undefined" && localNetGate.isPublicOrigin);
+
+  if(!granted || publicHttps){
+    /* No LNA permission, or impossible mixed content → redirect. */
+    notify("Redirecting to device…");
+    location.href = url;
+    return;
+  }
+
+  /* Permission granted + local origin → embed in the iframe. */
   state.currentViewerUrl = url;
   viewerFrame.src = url;
   viewer.classList.remove("hidden");
