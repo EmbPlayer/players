@@ -46,10 +46,7 @@ function closeConfigModal(){
   configModal.classList.add("hidden");
 }
 
-/* ⚙️ Settings — one of the two explicit permission entry points.
-   Every click while not granted triggers permission. The gate is
-   hidden first so the modal is not trapped behind it. The modal
-   ALWAYS opens — user is never blocked from configuring options. */
+/* ⚙️ Settings — one of the two explicit permission entry points. */
 btnOpenConfig.addEventListener("click", async () => {
   if(typeof localNetGate !== "undefined" &&
      typeof triggerAllow === "function" &&
@@ -57,13 +54,13 @@ btnOpenConfig.addEventListener("click", async () => {
      !localNetGate.scanVerified){
 
     if(localNetGate.mode === "public-origin"){
-      notify("Serve from http://localhost to scan", "error");
+      notify("Serve from http://localhost to enable LAN access", "error");
       openConfigModal();
       return;
     }
 
     const r = await triggerAllow();
-    if(typeof hideLocalNetGate === "function") hideLocalNetGate(false);
+    if(typeof hideLocalNetGate === "function") hideLocalNetGate();
     if(r && effectiveStatus() !== "granted"){
       notify("Permission not granted — scanning is disabled until allowed", "error");
     }
@@ -83,35 +80,17 @@ btnModalSave.addEventListener("click", () => {
    FULLSCREEN VIEWER
    ============================================================ */
 
-const viewerLabelBtn  = document.getElementById("viewerLabel");
-const viewerBlockedEl = document.getElementById("viewerBlocked");
+const viewerLabelBtn = document.getElementById("viewerLabel");
 
-function showViewerBlocked(){
-  if(viewerFrame) viewerFrame.src = "about:blank";
-  if(viewerBlockedEl) viewerBlockedEl.classList.remove("hidden");
-}
-function hideViewerBlocked(){
-  if(viewerBlockedEl) viewerBlockedEl.classList.add("hidden");
-}
-
-/* openViewer never requests permission, never shows the gate,
-   never shows a toast — deep links, scan results, and saved
-   devices all use this path and must open directly.
-
-   If the page itself is a public origin (or HTTPS / file://),
-   Chrome will block the iframe at the network level regardless
-   of permission, so a placeholder is shown instead.              */
+/* openViewer just tries the iframe. No permission checks, no
+   gate, no placeholder — if the browser allows it, it shows the
+   device; if the browser blocks it (public origin, LNA denial,
+   mixed content), Chrome shows its own native error inside the
+   iframe. The user still sees the toolbar and can press Back.   */
 function openViewer(ip, port){
   const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
-
-  if(typeof isViewerBlockedByBrowser === "function" && isViewerBlockedByBrowser()){
-    showViewerBlocked();
-  } else {
-    hideViewerBlocked();
-    viewerFrame.src = url;
-  }
-
+  viewerFrame.src = url;
   viewer.classList.remove("hidden");
   document.body.style.overflow = "hidden";
   updateViewerLabel(ip, port);
@@ -181,7 +160,6 @@ if(viewerLabelBtn){
 function closeViewer(){
   viewer.classList.add("hidden");
   viewerFrame.src = "about:blank";
-  hideViewerBlocked();
   state.currentViewerUrl = null;
   state.currentViewerLabel = "";
   document.body.style.overflow = "";
@@ -191,13 +169,12 @@ function closeViewer(){
 
 viewerClose.addEventListener("click", closeViewer);
 
-/* Escape: dismiss gate first (user skip), then viewer, then modal. */
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
   const gate = document.getElementById("localNetGate");
   if(gate && !gate.classList.contains("hidden")){
-    hideLocalNetGate(true);
+    hideLocalNetGate();
     return;
   }
 
@@ -206,10 +183,6 @@ document.addEventListener("keydown", (e) => {
 });
 
 viewerReload.addEventListener("click", () => {
-  if(typeof isViewerBlockedByBrowser === "function" && isViewerBlockedByBrowser()){
-    notify("Serve from http://localhost to fix this", "error");
-    return;
-  }
   const u = state.currentViewerUrl;
   if(!u) return;
   viewerFrame.src = "about:blank";
