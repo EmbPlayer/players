@@ -138,6 +138,23 @@
 <!-- ==================== VIEWER ==================== -->
 <div id="viewer" class="hidden" role="dialog" aria-modal="true">
   <iframe id="viewerFrame" src="about:blank" referrerpolicy="no-referrer"></iframe>
+
+  <!-- Shown only when the page is on a public origin / HTTPS / file://,
+       where Chrome blocks public→private iframe navigation. -->
+  <div id="viewerBlocked" class="viewer-blocked hidden" role="alert">
+    <div class="viewer-blocked-icon" aria-hidden="true">⛔</div>
+    <h2>Blocked by your browser</h2>
+    <p>
+      Chrome blocked this connection because the page is served from a
+      <strong>public origin</strong> and is trying to reach a device on your
+      <strong>local network</strong>.
+    </p>
+    <p>This is a browser security policy — the app cannot bypass it.</p>
+    <p>To use this feature, serve the app from <code>http://localhost</code>:</p>
+    <pre><code>python3 -m http.server 8000</code></pre>
+    <p>Then open <code>http://localhost:8000/</code>.</p>
+  </div>
+
   <div class="toolbar">
     <button id="viewerLabel" class="label-toggle-btn"
             type="button" title="Show label" aria-label="Show label"
