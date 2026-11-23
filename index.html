@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Embplayers — LAN Scanner</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="page-header">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">📡</div>
+    <div>
+      <h1>Embplayers</h1>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button id="lnBadge" class="ln-badge ln-badge--unknown"
+            type="button"
+            title="Local network access status"
+            aria-label="Local network access status">🌐</button>
+    <button id="btnToggleResults" class="toggle-btn" aria-expanded="false">
+      <span>▶ Scan Results</span>
+    </button>
+  </div>
+</header>
+
+<div id="browserSupportBanner" class="support-banner hidden" role="status">
+  <span class="support-banner-icon" id="bsbIcon" aria-hidden="true">⚠️</span>
+  <div class="support-banner-body">
+    <strong id="bsbTitle">Browser notice</strong>
+    <p id="bsbMsg"></p>
+  </div>
+  <div class="support-banner-actions">
+    <button id="bsbTest" type="button">Test</button>
+    <button id="bsbDismiss" type="button" title="Dismiss">✕</button>
+  </div>
+</div>
+
+<div id="resultsContainer" class="panel" style="display:none;">
+
+  <div class="top-bar">
+    <div class="field">
+      <label for="topDeviceUrl">Device address</label>
+      <input id="topDeviceUrl" class="ip-box" type="text"
+             placeholder="http://192.168.0.1:8080"
+             autocomplete="off" spellcheck="false"
+             title="Device IP or URL">
+    </div>
+    <div class="top-actions">
+      <button id="btnOpenConfig" title="Scan options">⚙️ Settings</button>
+      <button id="btnRunScan" class="primary" title="Run network scan">🚀 Run Scan</button>
+    </div>
+  </div>
+
+  <div id="progressContainer" class="hidden">
+    <div id="statusLine">
+      <span id="statusText">Ready.</span>
+      <button id="stopBtn" class="danger" disabled>Stop</button>
+    </div>
+    <div id="progressBar"><div></div></div>
+  </div>
+
+  <div id="summary"></div>
+
+  <div id="resultsTableWrapper" class="table-responsive hidden">
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th style="min-width:150px;">IP (click to open)</th>
+          <th>Label / Save status</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="emptyState" class="empty-state">
+    No scan results yet — click <strong>Run Scan</strong> to scan the network.
+  </div>
+</div>
+
+<div class="section-title"><span>⭐ Saved Devices</span></div>
+
+<div id="savedTableWrapper" class="table-responsive hidden">
+  <table id="savedTable">
+    <thead>
+      <tr>
+        <th style="min-width:190px;">URL / IP</th>
+        <th>Label</th>
+        <th style="width:72px; text-align:right;">Action</th>
+      </tr>
+    </thead>
+    <tbody id="savedTbody"></tbody>
+  </table>
+</div>
+
+<div id="savedEmptyState" class="empty-state" style="margin-bottom:20px;">
+  No saved links yet. Tap ☆ Save next to any scanned device to keep it here.
+</div>
+
+<div id="configModal" class="hidden" role="dialog" aria-modal="true" aria-label="Scan options">
+  <div class="modal-content">
+    <div class="modal-head">
+      <h2>Scan Options</h2>
+      <button id="btnModalClose" class="close-x" title="Close">✕</button>
+    </div>
+
+    <div class="row">
+      <div class="field" style="flex:1 1 140px;">
+        <label for="timeout">Timeout (ms)</label>
+        <input id="timeout" type="number" value="1500" min="100" max="10000">
+      </div>
+      <div class="field" style="flex:1 1 140px;">
+        <label for="conc">Concurrency</label>
+        <input id="conc" type="number" value="50" min="1" max="200">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="checkbox-row">
+        <input id="watchMode" type="checkbox">
+        <label for="watchMode">Watch mode — re-scan every</label>
+        <input id="watchInterval" type="number" value="30" min="5" max="600">
+        <span>seconds</span>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button id="btnModalCancel">Cancel</button>
+      <button id="btnModalSave" class="primary">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== VIEWER ==================== -->
+<div id="viewer" class="hidden" role="dialog" aria-modal="true">
+  <iframe id="viewerFrame" src="about:blank" referrerpolicy="no-referrer"></iframe>
+  <div class="toolbar">
+    <button id="viewerLabel" class="label-toggle-btn"
+            type="button" title="Show label" aria-label="Show label"
+            aria-pressed="false" hidden>📌</button>
+    <button id="viewerReload" title="Reload embedded page">🔄</button>
+    <button id="viewerClose" class="backbtn" title="Back to selection (Esc)">
+      <span aria-hidden="true">←</span><span>Back</span>
+    </button>
+  </div>
+</div>
+
+<div id="localNetGate" class="hidden" role="alertdialog" aria-modal="true"
+     aria-labelledby="lnTitle">
+  <div class="ln-content">
+    <div class="ln-icon" aria-hidden="true">🌐</div>
+    <h2 id="lnTitle">Local network access required</h2>
+    <p class="ln-msg" id="lnMsg">
+      Embplayers must be granted permission to
+      <strong>access devices on your local network</strong>.
+      Without this, scanning cannot work.
+    </p>
+    <div id="lnDeniedHelp" class="ln-help hidden"></div>
+    <ol class="ln-steps">
+      <li>Click <strong>Allow access</strong> below.</li>
+      <li>When your browser asks, choose <strong>Allow</strong>.</li>
+      <li>The app unlocks automatically once granted.</li>
+    </ol>
+    <div class="ln-actions">
+      <button id="lnRetry" class="primary">Allow access</button>
+      <button id="lnTest" class="hidden">Test connectivity</button>
+    </div>
+    <div class="ln-status" id="lnStatus"></div>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script src="js/config.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/url.js"></script>
+<script src="js/localnet.js"></script>
+<script src="js/saved.js"></script>
+<script src="js/results.js"></script>
+<script src="js/scan.js"></script>
+<script src="js/main.js"></script>
+<script src="js/pwa.js"></script>
+
+</body>
+</html>
