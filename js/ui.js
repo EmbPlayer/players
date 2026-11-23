@@ -46,29 +46,7 @@ function closeConfigModal(){
   configModal.classList.add("hidden");
 }
 
-btnOpenConfig.addEventListener("click", async () => {
-  if(typeof localNetGate !== "undefined" &&
-     typeof triggerAllow === "function" &&
-     localNetGate.permissionState !== "granted" &&
-     !localNetGate.scanVerified){
-
-    if(localNetGate.mode === "public-origin" ||
-       localNetGate.mode === "https-blocked" ||
-       localNetGate.mode === "file-origin"){
-      notify("Serve from http://localhost to enable LAN access", "error");
-      openConfigModal();
-      return;
-    }
-
-    const r = await triggerAllow();
-    if(typeof hideLocalNetGate === "function") hideLocalNetGate();
-    if(r && effectiveStatus() !== "granted"){
-      notify("Permission not granted — scanning is disabled until allowed", "error");
-    }
-  }
-  openConfigModal();
-});
-
+btnOpenConfig.addEventListener("click", openConfigModal);
 btnModalClose.addEventListener("click", closeConfigModal);
 btnModalCancel.addEventListener("click", closeConfigModal);
 
@@ -81,32 +59,19 @@ btnModalSave.addEventListener("click", () => {
    FULLSCREEN VIEWER
    ============================================================ */
 
+/* Grab the label button once — it never leaves the DOM. */
 const viewerLabelBtn = document.getElementById("viewerLabel");
 
-/* ---------- open viewer ----------
-   Permission granted  → embed in the iframe (old way).
-   No permission       → top-level redirect to the device.
-
-   Also redirects from any public HTTPS origin — mixed content
-   blocks the iframe there regardless of permission.              */
+/* ---------- open viewer ---------- */
 function openViewer(ip, port){
-  const url = `http://${ip}:${port}${DEVICE_PATH}`;
-
-  const granted =
-    typeof effectiveStatus === "function" && effectiveStatus() === "granted";
-
-  const publicHttps =
-    location.protocol === "https:" ||
-    (typeof localNetGate !== "undefined" && localNetGate.isPublicOrigin);
-
-  if(!granted || publicHttps){
-    /* No LNA permission, or impossible mixed content → redirect. */
-    notify("Redirecting to device…");
-    location.href = url;
+  if(typeof localNetBlocked === "function" && localNetBlocked()){
+    showLocalNetGate();
+    notify("Allow local network access before opening devices.", "error");
     return;
   }
 
-  /* Permission granted + local origin → embed in the iframe. */
+  /* Hidden DEVICE_PATH is appended here — the user never sees it. */
+  const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
   viewerFrame.src = url;
   viewer.classList.remove("hidden");
@@ -115,6 +80,7 @@ function openViewer(ip, port){
   saveViewerState(ip, port);
 }
 
+/* ---------- resolve label for the current ip/port ---------- */
 function resolveViewerLabel(ip, port){
   if(!ip) return "";
 
@@ -132,12 +98,14 @@ function resolveViewerLabel(ip, port){
   return "";
 }
 
+/* ---------- refresh the label button for a new device ---------- */
 function updateViewerLabel(ip, port){
   if(!viewerLabelBtn) return;
 
   const label = resolveViewerLabel(ip, port);
   state.currentViewerLabel = label;
 
+  /* Always start in the collapsed "📌" state */
   viewerLabelBtn.classList.remove("active");
   viewerLabelBtn.setAttribute("aria-pressed", "false");
   viewerLabelBtn.textContent = "📌";
@@ -154,6 +122,7 @@ function updateViewerLabel(ip, port){
   viewerLabelBtn.setAttribute("aria-label", "Show label");
 }
 
+/* ---------- 📌 click → toggle between label text and icon ---------- */
 function toggleViewerLabel(){
   if(!viewerLabelBtn || !state.currentViewerLabel) return;
 
@@ -175,6 +144,7 @@ if(viewerLabelBtn){
   viewerLabelBtn.addEventListener("click", toggleViewerLabel);
 }
 
+/* ---------- close viewer ---------- */
 function closeViewer(){
   viewer.classList.add("hidden");
   viewerFrame.src = "about:blank";
@@ -191,10 +161,7 @@ document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
   const gate = document.getElementById("localNetGate");
-  if(gate && !gate.classList.contains("hidden")){
-    hideLocalNetGate();
-    return;
-  }
+  if(gate && !gate.classList.contains("hidden")) return;
 
   if(!viewer.classList.contains("hidden")) closeViewer();
   if(!configModal.classList.contains("hidden")) closeConfigModal();

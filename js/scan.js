@@ -5,6 +5,7 @@
    stop button, watch mode.
    ============================================================ */
 
+/* ---------- single probe ---------- */
 async function probe(ip, port, timeout){
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeout);
@@ -26,15 +27,14 @@ async function probe(ip, port, timeout){
   }
 }
 
+/* ---------- run scan ---------- */
 btnRunScan.addEventListener("click", async () => {
   if(state.running) return;
 
+  /* --- local network access gate (must be granted to scan) --- */
   if(typeof localNetBlocked === "function" && localNetBlocked()){
-    if(localNetGate.mode === "public-origin"){
-      notify("Serve from http://localhost to enable LAN access", "error");
-    } else {
-      notify("Permission needed — click 🌐 to grant access", "error");
-    }
+    showLocalNetGate();
+    notify("Allow local network access before scanning.", "error");
     return;
   }
 
@@ -68,6 +68,9 @@ btnRunScan.addEventListener("click", async () => {
   if(!(concurrency >= 1 && concurrency <= 200)){
     notify("Invalid concurrency (1–200).", "error"); return;
   }
+
+  // NOTE: The Scan Results dropdown is intentionally NOT auto-opened here.
+  // It is only ever toggled by the "▶ Scan Results" button.
 
   state.running = true;
   state.stopRequested = false;
@@ -142,6 +145,9 @@ btnRunScan.addEventListener("click", async () => {
     state.lastOpenList = openDevices;
     renderList(openDevices, port, false);
 
+    /* Tell the LNA layer what happened. A successful scan is the ONLY
+       proof that LAN access works; a failed scan resets the badge so it
+       can never falsely claim success. */
     if(!state.stopRequested){
       if(openDevices.length > 0){
         if(typeof reportScanSuccess === "function"){
@@ -166,8 +172,10 @@ btnRunScan.addEventListener("click", async () => {
   }
 });
 
+/* ---------- stop ---------- */
 stopBtn.addEventListener("click", () => { state.stopRequested = true; });
 
+/* ---------- watch mode ---------- */
 function scheduleWatch(){
   if(state.watchTimer){ clearInterval(state.watchTimer); state.watchTimer = null; }
   if(!watchToggle.checked) return;
