@@ -3,31 +3,14 @@
 /* ============================================================
    LOCAL NETWORK ACCESS GATE + BROWSER SUPPORT DETECTION
    ------------------------------------------------------------
-   Badge states (truthful):
-     🟢 granted  → navigator.permissions says "granted"
-                   (Chrome/Edge 141+) OR a scan in this session
-                   found ≥ 1 device.
-     🔴 blocked  → permission denied, HTTPS origin, file:// origin
-     🟡 warn     → every soft-mode browser (Brave, Samsung,
-                   Firefox, Safari, other Chromium, unknown).
-                   Stays yellow until a real scan succeeds —
-                   probe-test success does NOT count as proof.
-
    Permission is only REQUESTED from:
      • the 🌐 badge        (every click, if not granted)
      • the ⚙️ Settings btn (every click, if not granted)
 
-   The gate overlay is NEVER shown on page load. It is shown
-   only when the user actively tries to scan / open a device,
-   or after a failed 🌐 click. Escape dismisses it so the user
-   can continue using the site without scanning.
-
-   Public API used by scan.js / ui.js:
-     • localNetBlocked()
-     • showLocalNetGate()
-     • triggerAllow()
-     • reportScanSuccess(count)
-     • reportScanFailure()
+   The gate overlay is NEVER shown on page load and NEVER shown
+   by openViewer() / Run Scan. Those only show a toast. The gate
+   is dismissable (Escape / backdrop click) so the page stays
+   usable even while it is on screen.
    ============================================================ */
 
 const LN_PERM    = "local-network-access";
@@ -441,16 +424,12 @@ function renderSupportBanner(){
   if(g.bsbDismissEl){
     g.bsbDismissEl.style.display = info.level === "error" ? "none" : "";
   }
-  /* Test-connection button is permanently hidden — permission is
-     only requested from the 🌐 badge and the ⚙️ Settings button. */
   if(g.bsbTestEl){
-    g.bsbTestEl.style.display = "none";
+    g.bsbTestEl.style.display = "none";   // never triggers permission
   }
 }
 
-/* ---------- apply mode ----------
-   IMPORTANT: this NEVER shows the gate. The gate is only shown by
-   the explicit callers (scan click, viewer open, badge click).   */
+/* ---------- apply mode — NEVER shows the gate on its own ---------- */
 function applyMode(mode){
   const g = localNetGate;
   g.mode = mode;
@@ -467,7 +446,7 @@ function applyMode(mode){
      mode === "https-blocked" || mode === "file-origin"){
     g.status = mode;
     setBadge(mode);
-    renderGateContent(mode);   // keep gate content ready, but hidden
+    renderGateContent(mode);   // prepare content, keep hidden
     renderSupportBanner();
     return;
   }
@@ -542,13 +521,9 @@ async function probeAndRefresh(timeoutMs){
 }
 
 /* ---------- trigger permission ----------
-   Called ONLY by: the 🌐 badge, the ⚙️ Settings button, and the
-   gate's own Allow / Test buttons (which are already part of the
-   permission-resolution flow once the gate is visible).
-
-   It fires LAN probes — which is what makes Chrome 141+ show the
-   native LNA prompt. It does NOT show the gate. Returns the probe
-   summary so the caller can decide what to show the user.        */
+   Called ONLY by: 🌐 badge, ⚙️ Settings button, gate's own buttons.
+   Fires LAN probes (which is what makes Chrome 141+ show the native
+   LNA prompt). Does NOT show the gate.                             */
 async function triggerAllow(){
   if(localNetGate.probing) return null;
   localNetGate.probing = true;
@@ -565,8 +540,6 @@ async function triggerAllow(){
     applyMode(recomputeMode());
   }
 
-  /* Update the gate's inline status if the gate happens to be visible
-     (e.g. user clicked the gate's own "Allow access" button). */
   const gateVisible = localNetGate.gateEl &&
                       !localNetGate.gateEl.classList.contains("hidden");
   if(gateVisible && localNetGate.statusEl){
@@ -578,7 +551,7 @@ async function triggerAllow(){
   return r;
 }
 
-/* ---------- scan result callbacks (called from scan.js) ---------- */
+/* ---------- scan result callbacks ---------- */
 function reportScanSuccess(count){
   const g = localNetGate;
   if(!count || count <= 0) return;
@@ -648,11 +621,7 @@ function dismissBanner(){
   hideBanner();
 }
 
-/* ---------- badge click → request permission ----------
-   This is the primary "ask for permission" entry point. Every
-   click while not granted fires the probes (Chrome 141+ shows
-   the browser prompt). If access is still not granted after the
-   attempt, the gate is shown so the user knows what to fix.      */
+/* ---------- badge click → request permission ---------- */
 function wireBadge(){
   const b = localNetGate.badgeEl;
   if(!b) return;
@@ -665,7 +634,7 @@ function wireBadge(){
     }
 
     const r = await triggerAllow();
-    if(!r) return;  // probing already in progress
+    if(!r) return;
 
     if(effectiveStatus() === "granted"){
       notify("Local network access granted ✓");
@@ -673,7 +642,6 @@ function wireBadge(){
     }
 
     if(localNetBlocked()){
-      /* Hard mode still blocking → show the gate with instructions. */
       showLocalNetGate();
     } else if(r.ok > 0){
       notify(`${r.ok}/${r.total} probes responded — run a scan to confirm`);
@@ -690,8 +658,6 @@ async function gateActionAttempt(){
   if(effectiveStatus() === "granted"){
     notify("Local network access granted ✓");
   }
-  /* If still blocked, gate stays visible — triggerAllow already
-     refreshed the inline status message.                          */
 }
 
 /* ---------- init ---------- */
@@ -708,6 +674,14 @@ async function gateActionAttempt(){
     localNetGate.testEl.addEventListener("click", gateActionAttempt);
   if(localNetGate.bsbDismissEl)
     localNetGate.bsbDismissEl.addEventListener("click", dismissBanner);
+
+  /* Gate is dismissable by clicking the backdrop — user is never
+     trapped inside it, and the page stays usable after closing. */
+  if(localNetGate.gateEl){
+    localNetGate.gateEl.addEventListener("click", (e) => {
+      if(e.target === localNetGate.gateEl) hideLocalNetGate();
+    });
+  }
 
   wireBadge();
 
