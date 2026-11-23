@@ -46,11 +46,10 @@ function closeConfigModal(){
   configModal.classList.add("hidden");
 }
 
-/* ⚙️ Settings is one of the TWO explicit permission entry points
-   (the other is the 🌐 badge). Every click while not granted
-   requests permission (fires LAN probes → Chrome's native LNA
-   prompt). The modal is opened regardless so the user can still
-   configure scan options — it never blocks the site. */
+/* ⚙️ Settings is one of the two explicit permission entry points.
+   Every click while not granted requests permission (fires LAN
+   probes → Chrome's native LNA prompt). The modal always opens,
+   so the user is never blocked from configuring scan options. */
 btnOpenConfig.addEventListener("click", async () => {
   if(typeof localNetGate !== "undefined" &&
      typeof triggerAllow === "function" &&
@@ -78,14 +77,13 @@ btnModalSave.addEventListener("click", () => {
 
 const viewerLabelBtn = document.getElementById("viewerLabel");
 
-/* openViewer does NOT request permission. If access isn't granted
-   it simply shows the gate — the user resolves it via the 🌐 badge
-   or ⚙️ Settings. */
+/* openViewer does NOT show the gate and does NOT request permission.
+   If access isn't granted, a small toast warns the user (so they
+   know why the iframe may appear blank) — but the viewer still
+   opens, and the page remains fully usable. */
 function openViewer(ip, port){
   if(typeof localNetBlocked === "function" && localNetBlocked()){
-    showLocalNetGate();
-    notify("Allow local network access before opening devices.", "error");
-    return;
+    notify("Click 🌐 to grant LAN access if the viewer is blank", "error");
   }
 
   const url = `http://${ip}:${port}${DEVICE_PATH}`;
@@ -169,8 +167,8 @@ function closeViewer(){
 
 viewerClose.addEventListener("click", closeViewer);
 
-/* Escape: dismiss gate first (so the user can skip and keep using
-   the site), then viewer, then config modal. */
+/* Escape: dismiss gate first (so user can skip and keep using the
+   site), then viewer, then config modal. */
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
