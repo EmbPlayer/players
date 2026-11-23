@@ -46,20 +46,24 @@ function closeConfigModal(){
   configModal.classList.add("hidden");
 }
 
-/* ⚙️ Settings is one of the two explicit permission entry points.
-   Every click while not granted fires a LAN probe (which is what
-   triggers Chrome's native LNA prompt when state is "prompt").
-   The gate — if it happened to be open from a prior badge click —
-   is hidden so the modal is not trapped underneath it.
-   The modal ALWAYS opens, so the user is never blocked from
-   configuring scan options. */
+/* ⚙️ Settings — one of the two explicit permission entry points.
+   Every click while not granted triggers permission. The gate is
+   hidden first so the modal is not trapped behind it. The modal
+   ALWAYS opens — user is never blocked from configuring options. */
 btnOpenConfig.addEventListener("click", async () => {
   if(typeof localNetGate !== "undefined" &&
      typeof triggerAllow === "function" &&
      localNetGate.permissionState !== "granted" &&
      !localNetGate.scanVerified){
+
+    if(localNetGate.mode === "public-origin"){
+      notify("Serve from http://localhost to scan", "error");
+      openConfigModal();
+      return;
+    }
+
     const r = await triggerAllow();
-    if(typeof hideLocalNetGate === "function") hideLocalNetGate();
+    if(typeof hideLocalNetGate === "function") hideLocalNetGate(false);
     if(r && effectiveStatus() !== "granted"){
       notify("Permission not granted — scanning is disabled until allowed", "error");
     }
@@ -79,18 +83,35 @@ btnModalSave.addEventListener("click", () => {
    FULLSCREEN VIEWER
    ============================================================ */
 
-const viewerLabelBtn = document.getElementById("viewerLabel");
+const viewerLabelBtn  = document.getElementById("viewerLabel");
+const viewerBlockedEl = document.getElementById("viewerBlocked");
 
-/* ---------- open viewer ----------
-   Opens the device directly. NO permission check, NO gate, NO
-   toast — a link loaded via ?load= / ?device=, a click on a
-   scan result, and a click on a saved device all use this path.
-   If the browser happens to allow the iframe (which is common
-   from http://localhost even without LNA), it just works.       */
+function showViewerBlocked(){
+  if(viewerFrame) viewerFrame.src = "about:blank";
+  if(viewerBlockedEl) viewerBlockedEl.classList.remove("hidden");
+}
+function hideViewerBlocked(){
+  if(viewerBlockedEl) viewerBlockedEl.classList.add("hidden");
+}
+
+/* openViewer never requests permission, never shows the gate,
+   never shows a toast — deep links, scan results, and saved
+   devices all use this path and must open directly.
+
+   If the page itself is a public origin (or HTTPS / file://),
+   Chrome will block the iframe at the network level regardless
+   of permission, so a placeholder is shown instead.              */
 function openViewer(ip, port){
   const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
-  viewerFrame.src = url;
+
+  if(typeof isViewerBlockedByBrowser === "function" && isViewerBlockedByBrowser()){
+    showViewerBlocked();
+  } else {
+    hideViewerBlocked();
+    viewerFrame.src = url;
+  }
+
   viewer.classList.remove("hidden");
   document.body.style.overflow = "hidden";
   updateViewerLabel(ip, port);
@@ -160,6 +181,7 @@ if(viewerLabelBtn){
 function closeViewer(){
   viewer.classList.add("hidden");
   viewerFrame.src = "about:blank";
+  hideViewerBlocked();
   state.currentViewerUrl = null;
   state.currentViewerLabel = "";
   document.body.style.overflow = "";
@@ -169,14 +191,13 @@ function closeViewer(){
 
 viewerClose.addEventListener("click", closeViewer);
 
-/* Escape: dismiss gate first (so user can skip and keep using the
-   site), then viewer, then config modal. */
+/* Escape: dismiss gate first (user skip), then viewer, then modal. */
 document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
   const gate = document.getElementById("localNetGate");
   if(gate && !gate.classList.contains("hidden")){
-    hideLocalNetGate();
+    hideLocalNetGate(true);
     return;
   }
 
@@ -185,6 +206,10 @@ document.addEventListener("keydown", (e) => {
 });
 
 viewerReload.addEventListener("click", () => {
+  if(typeof isViewerBlockedByBrowser === "function" && isViewerBlockedByBrowser()){
+    notify("Serve from http://localhost to fix this", "error");
+    return;
+  }
   const u = state.currentViewerUrl;
   if(!u) return;
   viewerFrame.src = "about:blank";
