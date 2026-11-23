@@ -29,13 +29,17 @@ async function probe(ip, port, timeout){
 
 /* ---------- run scan ----------
    Run Scan never shows the gate and never requests permission.
-   If LAN access is not granted, a toast tells the user to click
-   🌐 — the page stays fully usable.                              */
+   If not granted, a toast tells the user where to click — the
+   page stays fully usable.                                     */
 btnRunScan.addEventListener("click", async () => {
   if(state.running) return;
 
   if(typeof localNetBlocked === "function" && localNetBlocked()){
-    notify("Permission needed — click 🌐 to grant access", "error");
+    if(typeof localNetGate !== "undefined" && localNetGate.mode === "public-origin"){
+      notify("Serve from http://localhost to scan", "error");
+    } else {
+      notify("Permission needed — click 🌐 to grant access", "error");
+    }
     return;
   }
 
