@@ -6,13 +6,22 @@
    viewer session. Loaded last, after all helpers are defined.
 
    Query params:
-     ?device=<url>  → parse, render, AND open the fullscreen viewer
+     ?device=<url>  → parse, render, AND open the device
      ?load=<url>    → parse, render only (no viewer launch)
 
    If both are present, ?device= wins.
+
+   Opening a device waits for local-network detection so we know
+   whether to use the iframe viewer (permission OK) or a direct
+   redirect (no permission). Nothing here ever forces the
+   permission gate — it only appears when the user tries to scan.
    ============================================================ */
 
 (function(){
+  const ready = (typeof localNetReady !== "undefined" && localNetReady)
+    ? localNetReady.catch(() => {})
+    : Promise.resolve();
+
   /* ---------- restore last scan results ---------- */
   const restored = loadLastList();
   if(restored){
@@ -46,7 +55,8 @@
       state.lastOpenList = [{ ip, isDirect: true }];
       renderList(state.lastOpenList, port, false);
       if(shouldOpenViewer){
-        openViewer(ip, port);
+        /* openViewer picks iframe vs. direct redirect itself. */
+        ready.then(() => openViewer(ip, port));
       }
     }
     renderSavedList();
@@ -62,9 +72,17 @@
 
   renderSavedList();
 
-  /* ---------- restore viewer session ---------- */
+  /* ---------- restore viewer session (iframe mode only) ---------- */
   const viewerState = loadViewerState();
   if(viewerState){
-    openViewer(viewerState.ip, viewerState.port);
+    ready.then(() => {
+      if(typeof localNetBlocked === "function" && localNetBlocked()){
+        /* Without permission the viewer would redirect away on every
+           load — drop the stale session instead of trapping the user. */
+        clearViewerState();
+        return;
+      }
+      openViewer(viewerState.ip, viewerState.port);
+    });
   }
 })();

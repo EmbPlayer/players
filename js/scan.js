@@ -182,7 +182,10 @@ function scheduleWatch(){
 
   const secs = Math.max(5, Math.min(600, parseInt(watchInput.value, 10) || 30));
   state.watchTimer = setInterval(() => {
-    if(!state.running) btnRunScan.click();
+    if(state.running) return;
+    /* Don't pop the permission gate from a background timer. */
+    if(typeof localNetBlocked === "function" && localNetBlocked()) return;
+    btnRunScan.click();
   }, secs * 1000);
 }
 

@@ -64,14 +64,19 @@ const viewerLabelBtn = document.getElementById("viewerLabel");
 
 /* ---------- open viewer ---------- */
 function openViewer(ip, port){
+  /* Hidden DEVICE_PATH is appended here — the user never sees it. */
+  const url = `http://${ip}:${port}${DEVICE_PATH}`;
+
+  /* No local-network permission → an iframe can't reach the device.
+     Fall back to a direct top-level redirect (works on HTTPS pages too).
+     Viewer state is NOT saved, so coming back never loops into a redirect. */
   if(typeof localNetBlocked === "function" && localNetBlocked()){
-    showLocalNetGate();
-    notify("Allow local network access before opening devices.", "error");
+    clearViewerState();
+    notify("Opening device directly…");
+    setTimeout(() => { window.location.assign(url); }, 150);
     return;
   }
 
-  /* Hidden DEVICE_PATH is appended here — the user never sees it. */
-  const url = `http://${ip}:${port}${DEVICE_PATH}`;
   state.currentViewerUrl = url;
   viewerFrame.src = url;
   viewer.classList.remove("hidden");
@@ -161,7 +166,10 @@ document.addEventListener("keydown", (e) => {
   if(e.key !== "Escape") return;
 
   const gate = document.getElementById("localNetGate");
-  if(gate && !gate.classList.contains("hidden")) return;
+  if(gate && !gate.classList.contains("hidden")){
+    hideLocalNetGate();
+    return;
+  }
 
   if(!viewer.classList.contains("hidden")) closeViewer();
   if(!configModal.classList.contains("hidden")) closeConfigModal();

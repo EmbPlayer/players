@@ -13,7 +13,13 @@
                    Stays yellow until a real scan succeeds —
                    probe-test success does NOT count as proof.
 
-   Public API used by scan.js / ui.js:
+   NON-FORCING: the permission gate is NEVER shown on page load.
+   It only appears when the user actually tries to scan (or taps
+   the badge). When access is blocked, opening a device skips the
+   iframe and redirects straight to http://<ip>:<port>/main.
+
+   Public API used by scan.js / ui.js / main.js:
+     • localNetReady  (promise — detection finished)
      • localNetBlocked()
      • showLocalNetGate()
      • reportScanSuccess(count)
@@ -149,6 +155,7 @@ function cacheEls(){
   g.statusEl   = document.getElementById("lnStatus");
   g.retryEl    = document.getElementById("lnRetry");
   g.testEl     = document.getElementById("lnTest");
+  g.dismissEl  = document.getElementById("lnDismiss");
   g.badgeEl    = document.getElementById("lnBadge");
 
   g.bannerEl     = document.getElementById("browserSupportBanner");
@@ -161,6 +168,7 @@ function cacheEls(){
 
 function showLocalNetGate(){
   if(!localNetGate.gateEl) return;
+  if(localNetBlocked()) renderGateContent(localNetGate.mode);
   localNetGate.gateEl.classList.remove("hidden");
   document.body.style.overflow = "hidden";
   hideBanner();
@@ -338,6 +346,13 @@ function getSupportInfo(){
       msg: "Open this site's settings (lock icon in the address bar) and set " +
            "<strong>Local network access</strong> to Allow." };
   }
+  if(g.permissionState === "prompt" && !g.isHttps && !g.isFileOrigin){
+    return { level: "warn",
+      title: "Local network access not granted yet",
+      msg: "You can use the app without it: devices will open by " +
+           "<strong>direct redirect</strong> instead of an embedded frame. " +
+           "Permission is only requested when you press <strong>Run Scan</strong>." };
+  }
   if(g.isFileOrigin){
     return { level: "error",
       title: "Serve this page over http://localhost",
@@ -461,8 +476,11 @@ function applyMode(mode){
      mode === "https-blocked" || mode === "file-origin"){
     g.status = mode;
     setBadge(mode);
-    showLocalNetGate();
-    renderGateContent(mode);
+
+    /* Never force the gate. Only refresh it if the user already opened it
+       (scan attempt / badge tap); otherwise just show the soft banner. */
+    const gateOpen = g.gateEl && !g.gateEl.classList.contains("hidden");
+    if(gateOpen) renderGateContent(mode);
     renderSupportBanner();
     return;
   }
@@ -698,6 +716,12 @@ function acknowledge(silent){
   }
 }
 
+function dismissGate(){
+  hideLocalNetGate();
+  renderSupportBanner();
+  notify("Skipped — devices will open by direct redirect");
+}
+
 function dismissBanner(){
   try{ localStorage.setItem(BSB_KEY, "1"); }catch{}
   hideBanner();
@@ -715,7 +739,7 @@ function wireBadge(){
       return;
     }
     if(localNetBlocked()){
-      applyMode(recomputeMode());
+      showLocalNetGate();
       return;
     }
     renderSupportBanner();
@@ -723,7 +747,7 @@ function wireBadge(){
 }
 
 /* ---------- init ---------- */
-(async function initLocalNetGate(){
+const localNetReady = (async function initLocalNetGate(){
   cacheEls();
   detectEnvironment();
   localNetGate.isBrave = await detectBrave();
@@ -734,6 +758,8 @@ function wireBadge(){
     localNetGate.retryEl.addEventListener("click", triggerAllow);
   if(localNetGate.testEl)
     localNetGate.testEl.addEventListener("click", triggerAllow);
+  if(localNetGate.dismissEl)
+    localNetGate.dismissEl.addEventListener("click", dismissGate);
   if(localNetGate.bsbTestEl)
     localNetGate.bsbTestEl.addEventListener("click", testFromBanner);
   if(localNetGate.bsbDismissEl)
