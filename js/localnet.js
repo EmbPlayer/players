@@ -26,7 +26,8 @@
      • reportScanFailure()
    ============================================================ */
 
-const LN_PERM    = "local-network-access";
+/* Chrome 142+ exposes "local-network"; older builds used "local-network-access". */
+const LN_PERM_NAMES = ["local-network", "local-network-access"];
 const LN_ACK_KEY = "lnAcknowledged";
 const BSB_KEY    = "bsbDismissed";
 
@@ -70,16 +71,17 @@ async function queryPermissionOnce(){
   if(!navigator.permissions || typeof navigator.permissions.query !== "function"){
     return "unsupported";
   }
-  try{
-    const st = await navigator.permissions.query({ name: LN_PERM });
-    st.onchange = () => {
-      localNetGate.permissionState = st.state;
-      applyMode(recomputeMode());
-    };
-    return st.state || "unknown";
-  }catch(_){
-    return "unsupported";
+  for(const name of LN_PERM_NAMES){
+    try{
+      const st = await navigator.permissions.query({ name });
+      st.onchange = () => {
+        localNetGate.permissionState = st.state;
+        applyMode(recomputeMode());
+      };
+      return st.state || "unknown";
+    }catch(_){ /* try next name */ }
   }
+  return "unsupported";
 }
 
 async function queryPermission(){
@@ -213,7 +215,6 @@ function recomputeMode(){
   const g = localNetGate;
 
   if(g.isFileOrigin) return "file-origin";
-  if(g.isHttps && g.permissionState !== "granted") return "https-blocked";
 
   if(g.permissionState === "granted") return "granted";
   if(g.permissionState === "prompt")  return "chrome-prompt";
@@ -222,6 +223,9 @@ function recomputeMode(){
     if(g.isBrave) return "brave";
     return "chrome-denied";
   }
+
+  /* No LNA permission API: an HTTPS page can't reach http:// LAN devices. */
+  if(g.isHttps) return "https-blocked";
 
   if(g.isBrave)          return "brave";
   if(g.isFirefox)        return "firefox";
@@ -346,7 +350,7 @@ function getSupportInfo(){
       msg: "Open this site's settings (lock icon in the address bar) and set " +
            "<strong>Local network access</strong> to Allow." };
   }
-  if(g.permissionState === "prompt" && !g.isHttps && !g.isFileOrigin){
+  if(g.permissionState === "prompt" && !g.isFileOrigin){
     return { level: "warn",
       title: "Local network access not granted yet",
       msg: "You can use the app without it: devices will open by " +
@@ -553,9 +557,11 @@ async function probeAll(timeoutMs){
 /* ---------- automatic permission request (page load) ---------- */
 async function autoRequestPermission(){
   const g = localNetGate;
-  if(g.permissionState !== "prompt") return;      // granted/denied/unsupported → nothing to ask
-  if(g.isHttps || g.isFileOrigin) return;         // probes can't work there
+  if(g.permissionState === "granted" || g.permissionState === "denied") return;
+  if(g.isFileOrigin) return;                      // probes can't work there
   if(g.probing) return;
+  /* "prompt" → ask. "unsupported"/"unknown" → probe anyway: some Chromium
+     builds show the browser prompt even though they hide the permission API. */
 
   g.probing = true;
   try{
